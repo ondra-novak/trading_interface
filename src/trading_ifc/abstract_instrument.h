@@ -79,6 +79,13 @@ public:
 
     Config get_config() const {return _ptr->get_config();}
 
+    struct Hasher {
+        auto operator()(const Instrument &ord) const {
+            std::hash<std::shared_ptr<const IInstrument> > hasher;
+            return hasher(ord._ptr);
+        }
+    };
+
 
 
 protected:

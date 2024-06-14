@@ -13,9 +13,19 @@ class AccountState;
 class IStrategy {
 public:
 
+    virtual ~IStrategy() = default;
+
+    ///clone strategy state (need for speculative simulation)
+    virtual IStrategy *clone() = 0;
+
+    ///helps to write clone function
+    template<typename X>
+    static X *do_clone(const X *me) {return new X(*me);}
+
+
 
     ///called on initialization
-    virtual void init(StrategyContext ctx) = 0;
+    virtual void on_init(StrategyContext ctx) = 0;
 
     ///called at the beginning and when instrument update is requested
     virtual void on_instrument(Instrument i) = 0;
@@ -35,12 +45,6 @@ public:
     ///called when fill is detected
     virtual void on_fill(Order ord, Fill fill) = 0;
 
-    ///clone strategy state (need for speculative simulation)
-    virtual IStrategy *clone() = 0;
-
-    ///helps to write clone function
-    template<typename X>
-    static X *do_clone(const X *me) {return X(*me);}
 
 };
 

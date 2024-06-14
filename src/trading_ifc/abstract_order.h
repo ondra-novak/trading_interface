@@ -105,45 +105,44 @@ public:
 
     using Reason = IOrder::Reason;
 
-    explicit operator bool() const {return _ptr != nullptr;}
-    bool defined() const {return _ptr != nullptr;}
-    bool operator!() const {return _ptr == nullptr;}
+    explicit operator bool() const {return _ptr != null_order_ptr;}
+    bool defined() const {return _ptr != null_order_ptr;}
+    bool operator!() const {return _ptr == null_order_ptr;}
 
     bool operator==(const Order &other) const = default;
 
     ///get order state
     State get_state() const {
-        return _ptr?_ptr->get_state():State::undefined;
+        return _ptr->get_state();
     }
 
     ///get reason for current state
     Reason get_reason() const {
-        return _ptr?_ptr->get_reason():Reason::no_reason;
+        return _ptr->get_reason();
     }
 
     ///get message associated with the reason
     std::string get_message() const {
-        return _ptr?_ptr->get_message():std::string();
+        return _ptr->get_message();
     }
 
     ///get filled amount
     double get_filled() const {
-        return _ptr?_ptr->get_filled():0.0;
+        return _ptr->get_filled();
     }
 
     ///get total amount
     double get_total() const {
-        return _ptr?_ptr->get_total():0.0;
+        return _ptr->get_total();
     }
 
     ///get last executed price
     double get_last_price() const {
-        return _ptr?_ptr->get_last_price():0.0;
+        return _ptr->get_last_price();
     }
 
     Instrument get_instrument() const {
-        if (_ptr) return _ptr->get_instrument();
-        throw std::runtime_error("No instrument associated");
+        return _ptr->get_instrument();
     }
 
 

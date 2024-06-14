@@ -31,7 +31,7 @@ public:
     virtual void update_instrument(const Instrument &i) = 0;
 
     ///Retrieves current time
-    virtual Timestamp get_current_time() const = 0;
+    virtual Timestamp now() const = 0;
 
     ///Sets timer, which triggers event, on strategy interface
     virtual TimerID set_timer(Timestamp at) = 0;
@@ -93,6 +93,11 @@ public:
     ///reset variable
     virtual void reset_var(std::string_view name) = 0;
 
+    ///allocate equity on given account
+    virtual void allocate(const Account &a, double equity) = 0;
+
+
+
 };
 
 class NullContext: public IContext {
@@ -106,7 +111,7 @@ public:
     virtual long int get_var(std::string_view , long int ) override{throw_error();}
     virtual Fills get_fills(std::size_t ) override{throw_error();}
     virtual void set_var(std::string_view , int ) override{throw_error();}
-    virtual Timestamp get_current_time() const override{throw_error();}
+    virtual Timestamp now() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual double get_var(std::string_view , double ) override{throw_error();}
     virtual void set_var(std::string_view , long int ) override{throw_error();}
@@ -116,6 +121,7 @@ public:
     virtual void reset_var(std::string_view ) override{throw_error();}
     virtual Order place(const Instrument &,
             const OrderParams &) override{throw_error();}
+    virtual void allocate(const Account &, double ) override {throw_error();}
     constexpr virtual ~NullContext() {}
 };
 
@@ -130,19 +136,28 @@ public:
     Context(std::shared_ptr<IContext> ptr):_ptr(std::move(ptr)) {}
 
 
-    ///request update account
+    ///request update account (calls on_account())
     void update_account(const Account &a) {_ptr->update_account(a);}
-    ///request update instrument
+    ///request update instrument (calls on_instrument())
     void update_instrument(const Instrument &i) {_ptr->update_instrument(i);}
     ///Retrieves current time
-    Timestamp get_current_time() const {return _ptr->get_current_time();}
+    Timestamp now() const {return _ptr->now();}
     ///Sets timer, which triggers event, on strategy interface
     TimerID set_timer(Timestamp at) {return _ptr->set_timer(at);}
     ///Cancel timer
     bool clear_timer(TimerID id) {return _ptr->clear_timer(id);}
     ///Place an order
     Order place(const Instrument &instrument, const OrderParams &params) {return _ptr->place(instrument, params);}
-
+    ///Creates an order, which is asociated with an instrument, but it is not placed
+    /**
+     * You can use replace() function to place the order with new params. This
+     * allows to track single order without need to know, whether order is actually
+     * placed or not
+     *
+     * @param instrument associated instrument
+     * @return dummy order (can be replaced)
+     */
+    Order create(const Instrument &instrument) {return _ptr->create(instrument);}
     ///Cancel given order
     void cancel(const Order &order) {return _ptr->cancel(order);}
 
@@ -200,6 +215,20 @@ public:
     ///reset variable
     void reset_var(std::string_view name) {
         _ptr->reset_var(name);
+    }
+
+    ///allocate equity for current strategy
+    /**
+     * If equity is shared between multiple strategies,
+     * it helps to visualise, how much equity is unallocated or overallocated
+     * @param a account
+     * @param equity amount equity;
+     *
+     * @note not persistent.
+     *
+     */
+    void allocate(const Account &a, double equity) {
+        return _ptr->allocate(a, equity);
     }
 
 protected:

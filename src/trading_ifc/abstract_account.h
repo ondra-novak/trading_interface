@@ -23,7 +23,7 @@ public:
     struct Position {
         long uid = 0;    //uid of position
         double amount = 0;      //position size (can be negative when overall position)
-        double open_price = 0;  //open price
+        double open_price = 0;  //open price (if 0 then unknown)
     };
 
     struct HedgePosition {
@@ -103,6 +103,14 @@ public:
     Account(std::shared_ptr<const IAccount> x): _ptr(std::move(x)) {}
 
     bool operator==(const Account &other) const = default;
+
+    struct Hasher {
+        auto operator()(const Account &ord) const {
+            std::hash<std::shared_ptr<const IAccount> > hasher;
+            return hasher(ord._ptr);
+        }
+    };
+
 protected:
     std::shared_ptr<const IAccount> _ptr;
 };
