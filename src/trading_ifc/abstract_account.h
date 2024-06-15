@@ -9,6 +9,8 @@
 namespace trading_ifc {
 
 
+using PositionID = const void *;
+
 class Instrument;
 
 class IAccount {
@@ -21,7 +23,7 @@ public:
     };
 
     struct Position {
-        long uid = 0;    //uid of position
+        PositionID id = {};    //id of position
         double amount = 0;      //position size (can be negative when overall position)
         double open_price = 0;  //open price (if 0 then unknown)
     };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "abstract_order.h"
-#include "order_params.h"
+
 #include "fill.h"
 #include "ticker.h"
 
@@ -40,11 +40,11 @@ public:
     virtual bool clear_timer(TimerID id) = 0;
 
     ///Place an order
-    virtual Order place(const Instrument &instrument, const OrderParams &params) = 0;
+    virtual Order place(const Instrument &instrument, const Order::Setup &setup) = 0;
 
     ///Creates an order, which is asociated with an instrument, but it is not placed
     /**
-     * You can use replace() function to place the order with new params. This
+     * You can use replace() function to place the order with new setup. This
      * allows to track single order without need to know, whether order is actually
      * placed or not
      *
@@ -59,7 +59,7 @@ public:
     ///Replace order
     /**
      * @param order order to replace
-     * @param params new params of the order
+     * @param setup new setup of the order
      * @return new order
      *
      * @note if replace partially filled order, filled amount is perserved
@@ -67,7 +67,7 @@ public:
      * without avoiding double execution. In this case, old order is canceled
      * new order is rejected
      */
-    virtual Order replace(const Order &order, const OrderParams &params) = 0;
+    virtual Order replace(const Order &order, const Order::Setup &setup) = 0;
 
     ///Retrieve last fills
     virtual Fills get_fills(std::size_t limit) = 0;
@@ -105,7 +105,7 @@ public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
     virtual TimerID set_timer(Timestamp) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();};
-    virtual Order replace(const Order &, const OrderParams &) override {throw_error();}
+    virtual Order replace(const Order &, const Order::Setup &) override {throw_error();}
     virtual void update_instrument(const Instrument &) override {throw_error();}
     virtual int get_var(std::string_view , int ) override{throw_error();}
     virtual long int get_var(std::string_view , long int ) override{throw_error();}
@@ -120,7 +120,7 @@ public:
     virtual Order create(const Instrument &)override{throw_error();}
     virtual void reset_var(std::string_view ) override{throw_error();}
     virtual Order place(const Instrument &,
-            const OrderParams &) override{throw_error();}
+            const Order::Setup &) override{throw_error();}
     virtual void allocate(const Account &, double ) override {throw_error();}
     constexpr virtual ~NullContext() {}
 };
@@ -147,10 +147,10 @@ public:
     ///Cancel timer
     bool clear_timer(TimerID id) {return _ptr->clear_timer(id);}
     ///Place an order
-    Order place(const Instrument &instrument, const OrderParams &params) {return _ptr->place(instrument, params);}
+    Order place(const Instrument &instrument, const Order::Setup &setup) {return _ptr->place(instrument, setup);}
     ///Creates an order, which is asociated with an instrument, but it is not placed
     /**
-     * You can use replace() function to place the order with new params. This
+     * You can use replace() function to place the order with new setup. This
      * allows to track single order without need to know, whether order is actually
      * placed or not
      *
@@ -164,16 +164,20 @@ public:
     ///Replace order
     /**
      * @param order order to replace.
-     * @param params new params of the order
+     * @param setup new setup of the order
      * @return new order
      *
      * @note if replace partially filled order, filled amount is perserved
      * @note replace can fail, if exchange cannot garanteed to replace order
      * without avoiding double execution. In this case, old order is canceled
      * new order is rejected
+     *
+     * @note if order is pending, you probably can replace with order of same
+     * side and behavior. If order is done, it can be replaced with any
+     * order (it only associates with order's original instrument)
      */
-    Order replace(const Order &order, const OrderParams &params) {
-        return _ptr->replace(order, params);
+    Order replace(const Order &order, const Order::Setup &setup) {
+        return _ptr->replace(order, setup);
     }
 
     ///Retrieve last fills
