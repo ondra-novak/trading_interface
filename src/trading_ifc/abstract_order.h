@@ -75,24 +75,34 @@ public:
     ///Order is undefined
     struct Undefined {};
 
+    struct Options {
+        ///specifies matching behavior
+        Behavior behavior = Behavior::standard;
+        ///specifies new position leverage - if applicable - default value: use shared leverage
+        double leverage = 0;
+
+        static constexpr Options Default() {return {};}
+    };
+
+
     ///common part for all orders
     struct Common {
-        Side side;
-        Behavior behavior;
+        Side side = {};
+        Options options = {};
     };
 
     ///Market order
     struct Market: Common {
         double amount;
-        Market(Side s, double amount, Behavior b = Behavior::standard)
-            :Common{s, b},amount(amount) {}
+        Market(Side s, double amount, Options opt = Options::Default())
+            :Common{s, opt},amount(amount) {}
     };
 
     ///Limit order
     struct Limit: Market {
         double limit_price;
-        Limit(Side s, double amount, double limit_price, Behavior b = Behavior::standard)
-            :Market(s, amount, b), limit_price(limit_price) {}
+        Limit(Side s, double amount, double limit_price, Options opt = Options::Default())
+            :Market(s, amount, opt), limit_price(limit_price) {}
     };
 
     ///Limit post only - rejected if would immediately match
@@ -103,28 +113,28 @@ public:
     ///Stop order
     struct Stop: Market {
         double stop_price;
-        Stop(Side s, double amount, double stop_price, Behavior b = Behavior::standard)
-            :Market(s, amount, b), stop_price(stop_price) {}
+        Stop(Side s, double amount, double stop_price, Options opt = Options::Default())
+            :Market(s, amount, opt), stop_price(stop_price) {}
     };
 
     ///StopLimit order
     struct StopLimit: Stop {
         double limit_price;
-        StopLimit(Side s, double amount, double stop_price, double limit_price, Behavior b = Behavior::standard)
-            :Stop(s, amount, stop_price, b), limit_price(limit_price) {}
+        StopLimit(Side s, double amount, double stop_price, double limit_price, Options opt = Options::Default())
+            :Stop(s, amount, stop_price, opt), limit_price(limit_price) {}
     };
 
     ///Trailing stop order
     struct TrailingStop: Market {
         double stop_distance;
-        TrailingStop(Side s, double amount, double stop_distance, Behavior b = Behavior::standard)
-            :Market(s, amount, b), stop_distance(stop_distance) {}
+        TrailingStop(Side s, double amount, double stop_distance, Options opt = Options::Default())
+            :Market(s, amount, opt), stop_distance(stop_distance) {}
     };
 
     ///Target and StopLoss order (OCO)
     struct TpSl: StopLimit {
-        TpSl(Side s, double amount, double target_price, double stoploss_price, Behavior b = Behavior::standard)
-            :StopLimit(s, amount, stoploss_price, target_price, b) {}
+        TpSl(Side s, double amount, double target_price, double stoploss_price, Options opt = Options::Default())
+            :StopLimit(s, amount, stoploss_price, target_price, opt) {}
     };
     ///Close position order (CFD)
     struct ClosePosition {
@@ -216,12 +226,14 @@ public:
     using ClosePosition = IOrder::ClosePosition;
     using Side = IOrder::Side;
     using Behavior = IOrder::Behavior;
+    using Options = IOrder::Options;
 
     explicit operator bool() const {return _ptr != null_order_ptr;}
     bool defined() const {return _ptr != null_order_ptr;}
     bool operator!() const {return _ptr == null_order_ptr;}
 
     bool operator==(const Order &other) const = default;
+    std::strong_ordering operator<=>(const Order &other) const = default;
 
     ///get order state
     State get_state() const {
@@ -255,10 +267,12 @@ public:
         }, _ptr->get_setup());
     }
 
+    ///remain amount to fill
     double get_remain() const {
         return get_total() - get_filled();
     }
 
+    ///order's initial setup
     Setup get_setup() const {
         return _ptr->get_setup();
     }
@@ -268,10 +282,12 @@ public:
         return _ptr->get_last_price();
     }
 
+    ///associated instrument
     Instrument get_instrument() const {
         return _ptr->get_instrument();
     }
 
+    ///order's side
     std::optional<Side> get_side() const {
         return std::visit([](const auto &x) ->std::optional<Side> {
             if constexpr(is_order<decltype(x)>) {
@@ -282,10 +298,15 @@ public:
         }, _ptr->get_setup());
     }
 
+    ///returns true, if order is finished
     bool done() const {return get_state()!= Order::State::pending;}
+    ///returns true, if order is discard
     bool discarded() const {return get_state() == Order::State::discarded;}
+    ///returns true, if order is rejected
     bool rejected() const {return get_state() == Order::State::rejected;}
+    ///returns true, if order is pending
     bool pending() const {return get_state() == Order::State::pending;}
+    ///returns true, if order is canceled
     bool canceled() const {return get_state() == Order::State::canceled;}
 
     struct Hasher {

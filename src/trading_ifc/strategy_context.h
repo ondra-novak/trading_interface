@@ -4,19 +4,30 @@
 
 #include "fill.h"
 #include "ticker.h"
+#include <span>
 
 namespace trading_ifc {
 
 
-class Instrument;
-class Account;
-class Order;
-struct OrderState;
 
-using Timestamp = std::chrono::system_clock::time_point;
-using TimerID = unsigned int;
+using TimerID = std::intptr_t;
 
 using Fills = std::vector<Fill>;
+
+class Value;
+
+using ValueBase = std::variant<std::monostate,
+                               double,
+                               int,
+                               long,
+                               bool,
+                               std::span<Value> >;
+
+
+class Value : public ValueBase {
+public:
+    using ValueBase::ValueBase;
+};
 
 
 class IContext {
@@ -73,25 +84,13 @@ public:
     virtual Fills get_fills(std::size_t limit) = 0;
 
     ///set persistent variable
-    virtual void set_var(std::string_view name, double val) = 0;
-
-    ///set persistent variable
-    virtual void set_var(std::string_view name, int val) = 0;
-
-    ///set persistent variable
-    virtual void set_var(std::string_view name, long val) = 0;
+    virtual void set_var(int idx, const Value &val) = 0;
 
     ///get persistent variable
-    virtual double get_var(std::string_view name, double def_val) = 0;
+    virtual Value get_var(int idx) const = 0;
 
-    ///get persistent variable
-    virtual int get_var(std::string_view name, int def_val) = 0;
-
-    ///get persistent variable
-    virtual long get_var(std::string_view name, long def_val) = 0;
-
-    ///reset variable
-    virtual void reset_var(std::string_view name) = 0;
+    ///retrive strategy parameter (from config)
+    virtual Value get_param(std::string_view varname) const = 0;
 
     ///allocate equity on given account
     virtual void allocate(const Account &a, double equity) = 0;
@@ -107,22 +106,19 @@ public:
     virtual void cancel(const Order &) override {throw_error();};
     virtual Order replace(const Order &, const Order::Setup &) override {throw_error();}
     virtual void update_instrument(const Instrument &) override {throw_error();}
-    virtual int get_var(std::string_view , int ) override{throw_error();}
-    virtual long int get_var(std::string_view , long int ) override{throw_error();}
     virtual Fills get_fills(std::size_t ) override{throw_error();}
-    virtual void set_var(std::string_view , int ) override{throw_error();}
     virtual Timestamp now() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
-    virtual double get_var(std::string_view , double ) override{throw_error();}
-    virtual void set_var(std::string_view , long int ) override{throw_error();}
     virtual void update_account(const Account &) override{throw_error();}
-    virtual void set_var(std::string_view , double ) override{throw_error();}
     virtual Order create(const Instrument &)override{throw_error();}
-    virtual void reset_var(std::string_view ) override{throw_error();}
     virtual Order place(const Instrument &,
             const Order::Setup &) override{throw_error();}
     virtual void allocate(const Account &, double ) override {throw_error();}
+    virtual Value get_var(int ) const override  {throw_error();}
+    virtual void set_var(int  , const Value &) override {throw_error();}
+    virtual Value get_param(std::string_view ) const override {throw_error();}
     constexpr virtual ~NullContext() {}
+
 };
 
 
@@ -135,6 +131,76 @@ public:
     Context():_ptr(null_context_ptr) {}
     Context(std::shared_ptr<IContext> ptr):_ptr(std::move(ptr)) {}
 
+    template<typename Ctx>
+    class Variable {
+    public:
+
+        template<std::convertible_to<Value> T>
+        requires (!std::is_const_v<Ctx>)
+        const T &operator=(const T &x) {
+            ctx->set_var(var, Value(x));
+        }
+
+        template<std::same_as<std::nullptr_t> T>
+        requires (!std::is_const_v<Ctx>)
+        T operator=(T) {
+            ctx->set_var(var, Value());
+        }
+
+
+        template<typename T>
+        operator T() const {
+            return std::visit([](const auto &x)->T{
+                if constexpr (std::is_constructible_v<T, decltype(x)>) {
+                    return T(x);
+                } else {
+                    return T();
+                }
+            }, ctx->get_var(var));
+        }
+        template<typename T>
+        T operator()(const T &def_val) const {
+            return std::visit([&](const auto &x)->T{
+                if constexpr (std::is_constructible_v<T, decltype(x)>) {
+                    return T(x);
+                } else {
+                    return def_val;
+                }
+            }, ctx->get_var(var));
+        }
+
+        ///retrieve array value (with default value which is empty array)
+        template<typename T>
+        T operator()() const {
+            return operator()(std::span<Value>());
+        }
+
+
+    protected:
+        Variable (Ctx *ctx, int var)
+            :ctx(ctx),var(var) {}
+        Ctx *ctx;
+        int var;
+        friend class Context;
+    };
+
+    ///access to permanent storage
+    template<typename T>
+    requires std::same_as<std::underlying_type_t<T>, int>
+    auto operator[](T name) {
+        return Variable<IContext>(_ptr.get(), static_cast<int>(name));
+    }
+    ///access to permanent storage
+    template<typename T>
+    requires std::same_as<std::underlying_type_t<T>, int>
+    auto operator[](T name) const {
+        return Variable<const IContext>(_ptr.get(), static_cast<int>(name));
+    }
+
+    ///access to configuration
+    Value operator()(std::string_view name) const {
+        return _ptr->get_param(name);
+    }
 
     ///request update account (calls on_account())
     void update_account(const Account &a) {_ptr->update_account(a);}
@@ -183,42 +249,6 @@ public:
     ///Retrieve last fills
     Fills get_fills(std::size_t limit) {
         return _ptr->get_fills(limit);
-    }
-
-    ///set persistent variable
-    void set_var(std::string_view name, double val) {
-        _ptr->set_var(name, val);
-    }
-
-    ///set persistent variable
-    void set_var(std::string_view name, int val) {
-        _ptr->set_var(name, val);
-    }
-
-    ///set persistent variable
-    void set_var(std::string_view name, long val) {
-        _ptr->set_var(name, val);
-
-    }
-
-    ///get persistent variable
-    double get_var(std::string_view name, double def_val) {
-        return _ptr->get_var(name, def_val);
-    }
-
-    ///get persistent variable
-    int get_var(std::string_view name, int def_val) {
-        return _ptr->get_var(name, def_val);
-    }
-
-    ///get persistent variable
-    long get_var(std::string_view name, long def_val) {
-        return _ptr->get_var(name, def_val);
-    }
-
-    ///reset variable
-    void reset_var(std::string_view name) {
-        _ptr->reset_var(name);
     }
 
     ///allocate equity for current strategy

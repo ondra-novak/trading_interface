@@ -9,7 +9,7 @@
 namespace trading_ifc {
 
 
-using PositionID = const void *;
+using PositionID = std::intptr_t;
 
 class Instrument;
 
@@ -22,15 +22,21 @@ public:
         double leverage = 0;
     };
 
+    enum class Side {
+        buy = 1,
+        sell = -1
+    };
+
     struct Position {
         PositionID id = {};    //id of position
-        double amount = 0;      //position size (can be negative when overall position)
+        Side side;
+        double amount = 0;      //position size (negative is short)
         double open_price = 0;  //open price (if 0 then unknown)
     };
 
     struct HedgePosition {
         Position buy = {};
-        Position sell = {};
+        Position sell = {};     //note always emits negative position
     };
 
     using PositionList = std::vector<Position>;
@@ -105,6 +111,8 @@ public:
     Account(std::shared_ptr<const IAccount> x): _ptr(std::move(x)) {}
 
     bool operator==(const Account &other) const = default;
+    std::strong_ordering operator<=>(const Account &other) const = default;
+
 
     struct Hasher {
         auto operator()(const Account &ord) const {
