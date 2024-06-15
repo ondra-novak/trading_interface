@@ -16,11 +16,11 @@ public:
     virtual ~IStrategy() = default;
 
     ///clone strategy state (need for speculative simulation)
-    virtual IStrategy *clone() = 0;
+    virtual std::unique_ptr<IStrategy> clone() = 0;
 
     ///helps to write clone function
     template<typename X>
-    static X *do_clone(const X *me) {return new X(*me);}
+    static std::unique_ptr<X> *do_clone(const X *me) {return std::make_unique<X>(*me);}
 
 
 
