@@ -16,11 +16,32 @@ using Fills = std::vector<Fill>;
 
 class Value;
 
+struct DateValue {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    bool operator == (const DateValue &) const = default;
+    std::strong_ordering operator <=> (const DateValue &) const = default;
+    constexpr bool valid() const {return month>0  && month <=12 && day > 0 && day <=31;}
+};
+
+
+
+struct TimeValue {
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    bool operator == (const TimeValue &) const = default;
+    std::strong_ordering operator <=> (const TimeValue &) const = default;
+};
+
 using ValueBase = std::variant<std::monostate,
                                double,
                                int,
                                long,
                                bool,
+                               DateValue,
+                               TimeValue,
                                std::span<Value> >;
 
 

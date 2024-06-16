@@ -15,8 +15,8 @@ add_custom_command(
     VERBATIM
 )
 
-add_custom_target(libjson20_single_header ALL DEPENDS ${OUTPUT})
-add_dependencies(libjson20_single_header to_single_header)
+add_custom_target(trading_api_single_header ALL DEPENDS ${OUTPUT})
+add_dependencies(trading_api_single_header to_single_header)
 
 
 

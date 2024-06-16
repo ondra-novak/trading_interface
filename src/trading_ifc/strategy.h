@@ -1,5 +1,6 @@
 #pragma once
 #include "strategy_context.h"
+#include "config_desc.h"
 
 namespace trading_api {
 
@@ -23,6 +24,8 @@ public:
     static PStrategy do_clone(const X *me) {return std::make_unique<X>(*me);}
 
 
+    virtual StrategyConfigDesc get_config_desc() const = 0;
+
 
     ///called on initialization
     virtual void on_init(Context ctx) = 0;
@@ -44,6 +47,8 @@ public:
 
     ///called when fill is detected
     virtual void on_fill(Order ord, Fill fill) = 0;
+
+
 
 };
 
