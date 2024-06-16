@@ -6,7 +6,7 @@
 #include "ticker.h"
 #include <span>
 
-namespace trading_ifc {
+namespace trading_api {
 
 
 

@@ -8,7 +8,7 @@
 #include <optional>
 
 
-namespace trading_ifc {
+namespace trading_api {
 
 class Instrument;
 

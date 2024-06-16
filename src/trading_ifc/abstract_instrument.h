@@ -3,7 +3,7 @@
 #include "abstract_account.h"
 #include <cmath>
 
-namespace trading_ifc {
+namespace trading_api {
 
 
 

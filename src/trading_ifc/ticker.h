@@ -5,7 +5,7 @@
 using Timestamp = std::chrono::system_clock::time_point;
 
 
-namespace trading_ifc {
+namespace trading_api {
 
 struct Ticker {
     Timestamp timestamp;

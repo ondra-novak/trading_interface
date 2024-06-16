@@ -6,7 +6,7 @@
 #include <string_view>
 
 
-namespace trading_ifc {
+namespace trading_api {
 
 
 using PositionID = std::intptr_t;
