@@ -55,12 +55,6 @@ public:
         internal_error
     };
 
-    enum class Side {
-        ///buy side
-        buy,
-        ///sell side
-        sell
-    };
 
     enum class Behavior {
         ///standard behavior, reduce position, then open new position (no hedge)
@@ -213,7 +207,7 @@ public:
 
 template<typename T>
 concept is_order = requires(T order) {
-    {order.side}->std::same_as<IOrder::Side>;
+    {order.side}->std::same_as<Side>;
     {order.behavior}->std::same_as<IOrder::Behavior>;
 };
 
@@ -256,7 +250,6 @@ public:
     using TpSl = IOrder::TpSl;
     using TrailingStop = IOrder::TrailingStop;
     using ClosePosition = IOrder::ClosePosition;
-    using Side = IOrder::Side;
     using Behavior = IOrder::Behavior;
     using Options = IOrder::Options;
 

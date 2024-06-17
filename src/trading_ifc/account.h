@@ -8,6 +8,10 @@
 
 namespace trading_api {
 
+enum class Side {
+    buy = 1,
+    sell = -1
+};
 
 using PositionID = std::intptr_t;
 
@@ -24,10 +28,6 @@ public:
         double ratio = 0;               //ratio to main currency (if zero - unknown)
     };
 
-    enum class Side {
-        buy = 1,
-        sell = -1
-    };
 
     struct Position {
         PositionID id = {};    //id of position
