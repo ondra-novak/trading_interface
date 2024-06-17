@@ -1,7 +1,6 @@
 #pragma once
 
-#include "abstract_instrument.h"
-
+#include "instrument.h"
 
 #include <memory>
 #include <variant>
