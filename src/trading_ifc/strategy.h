@@ -1,6 +1,7 @@
 #pragma once
 #include "strategy_context.h"
 #include "config_desc.h"
+#include "orderbook.h"
 
 namespace trading_api {
 
@@ -37,7 +38,9 @@ public:
     virtual void on_account(Account a) = 0;
 
     ///called when ticker changes (market triggers)
-    virtual void on_ticker(Ticker tk) = 0;
+    virtual void on_ticker(Instrument i, const Ticker &tk) = 0;
+
+    virtual void on_orderbook(Instrument i, const OrderBook &ord) = 0;
 
     ///called when time reached on a timer (set_timer)
     virtual void on_timer(TimerID id) = 0;

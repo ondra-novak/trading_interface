@@ -80,6 +80,11 @@ public:
         Behavior behavior = Behavior::standard;
         ///specifies new position leverage - if applicable - default value: use shared leverage
         double leverage = 0;
+        ///specified amount is in volume - so amount of money you want to spend on retrieve on trade (fees are not included)
+        /** especially market orders can be executed as series of IOC orders if the
+         * exchange doesn't support this feature
+         */
+        bool amount_is_volume = false;
 
         static constexpr Options Default() {return {};}
     };
@@ -108,6 +113,12 @@ public:
     ///Limit post only - rejected if would immediately match
     struct LimitPostOnly: Limit {
         using Limit::Limit;
+    };
+
+    ///Limit immediate or cancel - rejects when order ends in orderbook (just fill up to limit)
+    struct ImmediateOrCancel: Limit {
+        using Limit::Limit;
+
     };
 
     ///Stop order
@@ -142,6 +153,27 @@ public:
         ClosePosition(const Account::Position &pos):pos_id(pos.id) {}
     };
 
+    ///Transfer money from one account to other account
+    /**
+     *  This order can be executed on any instrument (as instrument is ignored), however
+     *  it is strongly recommended, to use instrument which is associated with the
+     *  source account
+     *
+     *  The order doesn't generate fill. However upon successfull execution, it
+     *  generates on_order, which is changed to filled
+     *
+     *  If transfer requires currency exchange, it is executed as spot market order on
+     *  available pair. Such exchange is made only between known currency pairs, no
+     *  transitional execution is performed
+     */
+    struct Transfer {
+        Account source;
+        Account target;
+        double amount;
+        Transfer(const Account &source, const Account &target, double amount)
+            :source(source), target(target), amount(amount) {}
+    };
+
     using Setup = std::variant<
                 Undefined,
                 Market,
@@ -151,7 +183,8 @@ public:
                 StopLimit,
                 TrailingStop,
                 TpSl,
-                ClosePosition
+                ClosePosition,
+                Transfer
             >;
 
 

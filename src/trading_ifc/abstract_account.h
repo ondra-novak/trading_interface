@@ -20,6 +20,8 @@ public:
         double balance = 0;
         double blocked = 0;
         double leverage = 0;
+        std::string currency = {};      //currency symbol - depend on exchange
+        double ratio = 0;               //ratio to main currency (if zero - unknown)
     };
 
     enum class Side {
@@ -74,6 +76,9 @@ public:
      * @return list of positions
      */
     virtual PositionList get_all_positions(const Instrument &instrument) const = 0;
+    ///Retrieve account's label
+    /** Account's label can be defined in config */
+    virtual std::string get_label() const = 0;
 };
 
 
@@ -84,6 +89,8 @@ public:
 
     virtual HedgePosition get_hedge_position(const Instrument &) const override {return {};}
     virtual PositionList get_all_positions(const Instrument &) const override {return {};}
+
+    virtual std::string get_label() const {return {};}
     constexpr virtual ~NullAccount() {}
 };
 
@@ -112,6 +119,8 @@ public:
 
     bool operator==(const Account &other) const = default;
     std::strong_ordering operator<=>(const Account &other) const = default;
+
+    std::string get_label() const {return _ptr->get_label();}
 
 
     struct Hasher {

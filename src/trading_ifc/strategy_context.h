@@ -51,6 +51,11 @@ public:
 };
 
 
+enum class SubscriptionType {
+    ticker,
+    orderbook,
+};
+
 class IContext {
 public:
 
@@ -116,6 +121,13 @@ public:
     ///allocate equity on given account
     virtual void allocate(const Account &a, double equity) = 0;
 
+    ///subscribe market events
+    virtual void subscribe(SubscriptionType type, const Instrument &i, TimeSpan interval) = 0;
+
+    ///unsubscribe instrument
+    virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
+
+
 
 
 };
@@ -138,6 +150,8 @@ public:
     virtual Value get_var(int ) const override  {throw_error();}
     virtual void set_var(int  , const Value &) override {throw_error();}
     virtual Value get_param(std::string_view ) const override {throw_error();}
+    virtual void subscribe(SubscriptionType , const Instrument &, TimeSpan ) override {throw_error();}
+    virtual void unsubscribe(SubscriptionType , const Instrument &) override {throw_error();}
     constexpr virtual ~NullContext() {}
 
 };
@@ -246,7 +260,7 @@ public:
      */
     Order create(const Instrument &instrument) {return _ptr->create(instrument);}
     ///Cancel given order
-    void cancel(const Order &order) {return _ptr->cancel(order);}
+    void cancel(const Order &order) {_ptr->cancel(order);}
 
     ///Replace order
     /**
@@ -283,8 +297,55 @@ public:
      *
      */
     void allocate(const Account &a, double equity) {
-        return _ptr->allocate(a, equity);
+         _ptr->allocate(a, equity);
     }
+
+    ///Subscribe market data
+    /**
+     * @param type type of subscription (ticker, orderbook)
+     * @param i instrument instance
+     *
+     * Events are generated as they are received from market stream (as fastest as possible)
+     *
+     */
+    void subscribe(SubscriptionType type, const Instrument &i) {
+        _ptr->subscribe(type, i, std::chrono::seconds(0));
+    }
+
+    ///Subscribe market data
+    /**
+     * @param type type of subscription (ticker, orderbook)
+     * @param i instrument instance
+     * @param interval interval of generating market events. When this value is specified
+     * market events are generated in this specified interval regardless on, whether
+     * there were change in the event. Some exchanges cannot sent market events
+     * as a stream, so each event is actually full query on market state polled in
+     * specified interval. The service provider can adjust this interval to lowest
+     * allowed value (for example, exchanges where price is polled, you probably don't
+     * get interval under 1 minute)
+     *
+     * @note if called multiple times on single instrument, it only adjusts the
+     * interval.
+     */
+    template<typename A, typename B>
+    void subscribe(SubscriptionType type, const Instrument &i, std::chrono::duration<A,B> interval) {
+        _ptr->subscribe(type, i, std::chrono::duration_cast<TimeSpan>(interval));
+    }
+
+    ///Unsubscribe market data
+    /**
+     * @param type type of subscription
+     * @param i instrument
+     *
+     * @note if there is no subscription, it does nothing
+     *
+     * @note your strategy doesn't need to call unsubscribe in the destructor.
+     *
+     */
+    void unsubscribe(SubscriptionType type, const Instrument &i) {
+        _ptr->unsubscribe(type, i);
+    }
+
 
 protected:
     std::shared_ptr<IContext> _ptr;
