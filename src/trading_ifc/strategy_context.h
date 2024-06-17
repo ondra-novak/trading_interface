@@ -244,6 +244,12 @@ public:
     Timestamp now() const {return _ptr->now();}
     ///Sets timer, which triggers event, on strategy interface
     TimerID set_timer(Timestamp at) {return _ptr->set_timer(at);}
+
+    template<typename A, typename B>
+    TimerID set_timer(std::chrono::duration<A, B> dur) {
+        return _ptr->set_timer(now() + dur);
+    }
+
     ///Cancel timer
     bool clear_timer(TimerID id) {return _ptr->clear_timer(id);}
     ///Place an order
