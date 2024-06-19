@@ -6,6 +6,8 @@
 #include <mutex>
 #include <queue>
 #include <vector>
+#include <stop_token>
+#include <condition_variable>
 
 namespace trading_api {
 
@@ -38,13 +40,14 @@ public:
     template<std::invocable<Timestamp> NotifyFn>
     Timestamp wakeup(Timestamp cur_time, NotifyFn &&ntf) {
         std::unique_lock lk(_mx);
-        Timestamp retval = wakeup_internal(lk, cur_time);
-        if (retval  <= cur_time) return retval;
-        _ntf = std::forward<NotifyFn>(ntf);
-        return retval;
+        return wakeup_internal(lk, cur_time, std::forward<NotifyFn>(ntf));
     }
 
     bool cancel_timed(TimerID id);
+
+
+    ///run thread
+    void run(std::condition_variable &cond, std::stop_token stop);
 
 
 protected:
@@ -71,6 +74,13 @@ protected:
     Timestamp _next_notify = Timestamp::max();
 
     void notify();
+    template<std::invocable<Timestamp> NotifyFn>
+    Timestamp wakeup_internal(std::unique_lock<std::mutex> &lk, Timestamp cur_time, NotifyFn &&ntf) {
+        Timestamp retval = wakeup_internal(lk, cur_time);
+        if (retval  <= cur_time) return retval;
+        _ntf = std::forward<NotifyFn>(ntf);
+        return retval;
+    }
     Timestamp wakeup_internal(std::unique_lock<std::mutex> &lk, Timestamp cur_time);
     Timestamp calc_next_notify() const;
 

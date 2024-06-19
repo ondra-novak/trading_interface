@@ -103,4 +103,35 @@ Scheduler::Timestamp Scheduler::wakeup_internal(std::unique_lock<std::mutex> &lk
     return _next_notify;
 }
 
+bool Scheduler::CollapsableEvent::ordering(
+        const CollapsableEvent &a, const CollapsableEvent &b) {
+    return a.event_id < b.event_id;
 }
+
+void Scheduler::run(std::condition_variable &cond, std::stop_token stop) {
+    std::stop_callback __(stop, [&]{
+        cond.notify_all();
+    });
+    std::unique_lock lk(_mx);
+    Timestamp nx;
+    while (!stop.stop_requested()) {
+        nx = wakeup_internal(lk,std::chrono::system_clock::now(),[&](Timestamp newnx) {
+            if (newnx < nx) {
+                cond.notify_all();
+            }
+        });
+        if (nx == Timestamp::max()) {
+            cond.wait(lk);
+        } else {
+            cond.wait_until(lk, nx);
+        }
+    }
+    wakeup_internal(lk, std::chrono::system_clock::now(), [](auto){}); //disarm wakeup
+}
+
+
+
+
+
+}
+

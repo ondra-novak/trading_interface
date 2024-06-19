@@ -7,6 +7,7 @@ add_library (trading_api_common
     config_desc.cpp
     scheduler.cpp
     basic_order.cpp
+    basic_context.cpp
     )
 
 

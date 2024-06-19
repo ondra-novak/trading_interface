@@ -44,6 +44,7 @@ public:
     ///called when fill is detected
     virtual void on_event(Order ord, Fill fill) = 0;
 
+
 };
 
 
