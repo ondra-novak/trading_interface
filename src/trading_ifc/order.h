@@ -24,6 +24,8 @@ public:
         discarded,
         ///rejected by exchange
         rejected,
+        ///order is being sent to the exchange
+        sent,
         ///order is pending (on exchange)
         pending,
         ///order has been canceled
@@ -39,11 +41,13 @@ public:
         position_limit,
         ///discarded because max leverage would be reached
         max_leverage,
-        ///rejected because race condition during replace
-        race,
+        ///rejected during replace because there is unprocessed fill on way
+        replace_unprocessed_fill,
         ///discarded because invalid params
         invalid_params,
-        ///discarded because unsuppored
+        ///discarded because invalid usage of amend
+        invalid_amend,
+        ///discarded because unsuppored by service provider
         unsupported,
         ///no funds on exchange
         no_funds,
@@ -78,6 +82,27 @@ public:
          * exchange doesn't support this feature
          */
         bool amount_is_volume = false;
+
+        ///Specifies constrain on filled amount when order is being replaced
+        /**
+         *
+         * Creates a constrain which is active during replace. This constrain is tested
+         * when cancel+place is used to implement replace (amend == false). The
+         * service provider checks the filled field on canceled order and if this number
+         * is below or equal to specified value, the new order is placed. If this
+         * number is above specified value, the new order is rejected.
+         *
+         * In all cases, the original order is canceled.
+         *
+         * This constrain should be checked atomically. If this not handled by exchange,
+         * the service provider must handle it by self. In this case, there can
+         * be a small lag between cancel and place, when the service provider must check
+         * the filled amount. If this field is left on default value, the constrain is not
+         * checked.
+         *
+         * This option is not checked when new order is created using place().
+         */
+        double replace_filled_constrain = std::numeric_limits<double>::max();
 
         static constexpr Options Default() {return {};}
     };
@@ -190,7 +215,7 @@ public:
     virtual Reason get_reason() const = 0;
 
     ///get message associated with the reason
-    virtual std::string get_message() const = 0;
+    virtual std::string_view get_message() const = 0;
 
     ///get filled amount
     virtual double get_filled() const = 0;
@@ -202,7 +227,7 @@ public:
     virtual Instrument get_instrument() const = 0;
 
     ///retrieve order's initial setup
-    virtual Setup get_setup() const = 0;
+    virtual const Setup &get_setup() const = 0;
 };
 
 template<typename T>
@@ -222,11 +247,11 @@ class NullOrder: public IOrder {
 public:
     virtual State get_state() const override {return State::undefined;}
     virtual double get_last_price() const override {return 0.0;}
-    virtual std::string get_message() const override {return {};}
+    virtual std::string_view get_message() const override {return {};}
     virtual double get_filled() const override {return 0.0;}
     virtual Reason get_reason() const override {return Reason::no_reason;}
     virtual Instrument get_instrument() const override {return {};}
-    virtual Setup get_setup() const override {return {};}
+    virtual const Setup &get_setup() const override {return {};}
     constexpr virtual ~NullOrder() override {}
 };
 
@@ -271,7 +296,7 @@ public:
     }
 
     ///get message associated with the reason
-    std::string get_message() const {
+    std::string_view get_message() const {
         return _ptr->get_message();
     }
 
@@ -298,7 +323,7 @@ public:
     }
 
     ///order's initial setup
-    Setup get_setup() const {
+    const Setup &get_setup() const {
         return _ptr->get_setup();
     }
 

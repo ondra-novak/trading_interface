@@ -1,16 +1,16 @@
 #pragma once
 
+#include "coro_support.h"
 #include "fill.h"
 #include "order.h"
 #include "ticker.h"
 #include "timer.h"
-#include "runnable.h"
-
 #include <span>
 
 namespace trading_api {
 
 
+using CompletionCB = Function<void()>;
 
 
 using Fills = std::vector<Fill>;
@@ -63,17 +63,17 @@ public:
     virtual ~IContext() = default;
 
     ///request update account
-    virtual void update_account(const Account &a, std::unique_ptr<IRunnable> complete_ptr) = 0;
+    virtual void update_account(const Account &a, CompletionCB complete_ptr) = 0;
 
     ///request update instrument
-    virtual void update_instrument(const Instrument &i, std::unique_ptr<IRunnable> complete_ptr) = 0;
+    virtual void update_instrument(const Instrument &i, CompletionCB complete_ptr) = 0;
 
     ///Retrieves current time
     virtual Timestamp now() const = 0;
 
 
     ///Sets time, which calls function wrapped into runnable object. It is still bound to strategy
-    virtual TimerID set_timer(Timestamp at, std::unique_ptr<IRunnable> fnptr = {}) = 0;
+    virtual TimerID set_timer(Timestamp at, CompletionCB fnptr = {}) = 0;
 
     ///Cancel timer
     virtual bool clear_timer(TimerID id) = 0;
@@ -106,7 +106,7 @@ public:
      * without avoiding double execution. In this case, old order is canceled
      * new order is rejected
      */
-    virtual Order replace(const Order &order, const Order::Setup &setup) = 0;
+    virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) = 0;
 
     ///Retrieve last fills
     virtual Fills get_fills(std::size_t limit) = 0;
@@ -137,14 +137,14 @@ public:
 class NullContext: public IContext {
 public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
-    virtual TimerID set_timer(Timestamp , std::unique_ptr<IRunnable> ) override {throw_error();}
+    virtual TimerID set_timer(Timestamp , CompletionCB ) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();}
-    virtual Order replace(const Order &, const Order::Setup &) override {throw_error();}
-    virtual void update_instrument(const Instrument &, std::unique_ptr<IRunnable>) override {throw_error();}
+    virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
+    virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
     virtual Fills get_fills(std::size_t ) override{throw_error();}
     virtual Timestamp now() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
-    virtual void update_account(const Account &, std::unique_ptr<IRunnable>) override{throw_error();}
+    virtual void update_account(const Account &, CompletionCB) override{throw_error();}
     virtual Order create(const Instrument &)override{throw_error();}
     virtual Order place(const Instrument &,
             const Order::Setup &) override{throw_error();}
@@ -248,7 +248,7 @@ public:
      */
     template<std::invocable<> Fn>
     void update_account(const Account &a, Fn &&fn) {
-        _ptr->update_account(a, std::unique_ptr<Runnable<Fn> >(std::forward<Fn>(fn)));
+        _ptr->update_account(a, CompletionCB(std::forward<Fn>(fn)));
     }
 
     ///request update account - use coroutines
@@ -275,7 +275,7 @@ public:
      */
     template<std::invocable<> Fn>
     void update_instrument(const Instrument &i, Fn &&fn) {
-        _ptr->update_instrument(i, std::unique_ptr<Runnable<Fn> >(std::forward<Fn>(fn)));
+        _ptr->update_instrument(i, CompletionCB(std::forward<Fn>(fn)));
     }
 
     ///request update instrument - use coroutine
@@ -363,6 +363,13 @@ public:
     /**
      * @param order order to replace.
      * @param setup new setup of the order
+     * @param amend try to amend current order - the exchange just modifies amount,
+     * limit or stop price if order is pending (waiting for trigger). So you can
+     * amend only order with same side, instrument, etc. If amend is not possible,
+     * because above rules, new order is discarded and original order is untouched.
+     * If exchange doesn't support amend, the service provider can simulate this
+     * feature. In all cases, filled amount is transfered to the new order.
+     *
      * @return new order
      *
      * @note if replace partially filled order, filled amount is perserved
@@ -374,8 +381,8 @@ public:
      * side and behavior. If order is done, it can be replaced with any
      * order (it only associates with order's original instrument)
      */
-    Order replace(const Order &order, const Order::Setup &setup) {
-        return _ptr->replace(order, setup);
+    Order replace(const Order &order, const Order::Setup &setup, bool amend) {
+        return _ptr->replace(order, setup, amend);
     }
 
     ///Retrieve last fills
