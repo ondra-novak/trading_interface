@@ -8,6 +8,7 @@
 #include <vector>
 #include <stop_token>
 #include <condition_variable>
+#include "heap_utility.h"
 
 namespace trading_api {
 
@@ -44,7 +45,6 @@ public:
     }
 
     bool cancel_timed(TimerID id);
-
 
     ///run thread
     void run(std::condition_variable &cond, std::stop_token stop);
