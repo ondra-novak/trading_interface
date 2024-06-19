@@ -8,18 +8,22 @@ public:
 
     SimulContext(PStrategy strategy):_strategy(std::move(strategy)) {}
 
-    void init(Timestamp time);
+    void init(Timestamp time, IStrategy::InstrumentList instruments);
 
-    void set_now(Timestamp time);
+    TimerID set_time(Timestamp time);
 
 
     virtual Timestamp now() const override;
-    virtual TimerID set_timer(Timestamp at) override;
+    virtual TimerID set_timer(Timestamp at, std::unique_ptr<IRunnable> runnable) override;
     virtual bool clear_timer(TimerID id) override;
 
 protected:
 
-    using Timer = std::pair<Timestamp, TimerID>;
+    struct Timer {
+        Timestamp tp;
+        TimerID id;
+        std::unique_ptr<IRunnable> runnable;
+    };
     using Scheduler = std::vector<Timer>;
 
     PStrategy _strategy;

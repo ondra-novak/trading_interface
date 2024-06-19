@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../trading_ifc/abstract_instrument.h"
+#include "../trading_ifc/instrument.h"
 
 namespace trading_api {
 

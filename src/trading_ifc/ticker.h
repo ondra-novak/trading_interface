@@ -1,9 +1,9 @@
 #pragma once
 
+#include "timer.h"
+
 #include <chrono>
 #include <string>
-using Timestamp = std::chrono::system_clock::time_point;
-using TimeSpan = std::chrono::system_clock::duration;
 
 
 namespace trading_api {

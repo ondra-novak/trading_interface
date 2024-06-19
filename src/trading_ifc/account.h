@@ -90,7 +90,7 @@ public:
     virtual HedgePosition get_hedge_position(const Instrument &) const override {return {};}
     virtual PositionList get_all_positions(const Instrument &) const override {return {};}
 
-    virtual std::string get_label() const {return {};}
+    virtual std::string get_label() const override {return {};}
     constexpr virtual ~NullAccount() {}
 };
 
