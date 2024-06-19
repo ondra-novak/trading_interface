@@ -2,10 +2,12 @@ cmake_minimum_required(VERSION 3.5)
 
 
 
-add_library (trading_api_common 
+add_library (trading_api_common
     loader.cpp
     config_desc.cpp
+    scheduler.cpp
+    basic_order.cpp
     )
 
-    
+
 add_dependencies(trading_api_common libjson20_single_header)

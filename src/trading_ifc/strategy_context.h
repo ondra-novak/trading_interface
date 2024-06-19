@@ -103,7 +103,7 @@ public:
      * without avoiding double execution. In this case, old order is canceled
      * new order is rejected
      */
-    virtual Order replace(const Order &order, const Order::Setup &setup) = 0;
+    virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) = 0;
 
     ///Retrieve last fills
     virtual Fills get_fills(std::size_t limit) = 0;
@@ -136,7 +136,7 @@ public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
     virtual TimerID set_timer(Timestamp) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();};
-    virtual Order replace(const Order &, const Order::Setup &) override {throw_error();}
+    virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
     virtual void update_instrument(const Instrument &) override {throw_error();}
     virtual Fills get_fills(std::size_t ) override{throw_error();}
     virtual Timestamp now() const override{throw_error();}
@@ -265,6 +265,13 @@ public:
     /**
      * @param order order to replace.
      * @param setup new setup of the order
+     * @param amend try to amend current order - the exchange just modifies amount,
+     * limit or stop price if order is pending (waiting for trigger). So you can
+     * amend only order with same side, instrument, etc. If amend is not possible,
+     * because above rules, new order is discarded and original order is untouched.
+     * If exchange doesn't support amend, the service provider can simulate this
+     * feature. In all cases, filled amount is transfered to the new order.
+     *
      * @return new order
      *
      * @note if replace partially filled order, filled amount is perserved
@@ -276,8 +283,8 @@ public:
      * side and behavior. If order is done, it can be replaced with any
      * order (it only associates with order's original instrument)
      */
-    Order replace(const Order &order, const Order::Setup &setup) {
-        return _ptr->replace(order, setup);
+    Order replace(const Order &order, const Order::Setup &setup, bool amend) {
+        return _ptr->replace(order, setup, amend);
     }
 
     ///Retrieve last fills

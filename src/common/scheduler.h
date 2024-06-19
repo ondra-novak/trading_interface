@@ -1,0 +1,82 @@
+#pragma once
+
+#include <chrono>
+#include <cstdint>
+#include "../trading_ifc/function.h"
+#include <mutex>
+#include <queue>
+#include <vector>
+
+namespace trading_api {
+
+class Scheduler {
+public:
+    using TimerID = std::uintptr_t;
+    using Timestamp = std::chrono::system_clock::time_point;
+    using Runnable = function<void()>;
+    using Notify = function<void(Timestamp)>;
+    using EventSeverityID = int;
+
+    ///enqueue event to queue
+    void enqueue(Runnable r);
+    ///enqueue collapsed event (replaces existing event)
+    void enqueue_collapse(EventSeverityID event, Runnable r);
+    ///enqueue timed event
+    TimerID enqueue_timed(Timestamp tp, Runnable r);
+    ///wake up scheduler and borrow current thread
+    /**
+     * @param cur_time current time
+     * @param ntf notification function. This function is called when scheduler
+     * needs to update its wake_up time.
+     * @return Timestamp of next wakeup. If function needs another wakeup call,
+     * it must reurns cur_time or lower time
+     *
+     * @note this function should be called under strategy lock (each strategy has own scheduler)
+     * @note always processes only one event.
+     */
+
+    template<std::invocable<Timestamp> NotifyFn>
+    Timestamp wakeup(Timestamp cur_time, NotifyFn &&ntf) {
+        std::unique_lock lk(_mx);
+        Timestamp retval = wakeup_internal(lk, cur_time);
+        if (retval  <= cur_time) return retval;
+        _ntf = std::forward<NotifyFn>(ntf);
+        return retval;
+    }
+
+    bool cancel_timed(TimerID id);
+
+
+protected:
+
+    struct TimedEvent {
+        Timestamp tp;
+        TimerID id;
+        Runnable r;
+        static bool ordering(const TimedEvent &a, const TimedEvent &b);
+    };
+
+    struct CollapsableEvent {
+        EventSeverityID event_id;
+        Runnable r;
+        static bool ordering(const CollapsableEvent &a, const CollapsableEvent &b);
+    };
+
+    std::mutex _mx;
+    std::queue<Runnable> _queue;
+    std::vector<CollapsableEvent> _collapsable_queue;
+    std::vector<TimedEvent> _timed_queue;
+    TimerID _id_counter = 0;
+    Notify _ntf = [](Timestamp) {};
+    Timestamp _next_notify = Timestamp::max();
+
+    void notify();
+    Timestamp wakeup_internal(std::unique_lock<std::mutex> &lk, Timestamp cur_time);
+    Timestamp calc_next_notify() const;
+
+
+};
+
+
+
+}
