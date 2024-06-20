@@ -5,6 +5,7 @@
 #include "order.h"
 #include "ticker.h"
 #include "timer.h"
+#include "config.h"
 #include <span>
 
 namespace trading_api {
@@ -14,42 +15,6 @@ using CompletionCB = Function<void()>;
 
 
 using Fills = std::vector<Fill>;
-
-class Value;
-
-struct DateValue {
-    int year = 0;
-    int month = 0;
-    int day = 0;
-    bool operator == (const DateValue &) const = default;
-    std::strong_ordering operator <=> (const DateValue &) const = default;
-    constexpr bool valid() const {return month>0  && month <=12 && day > 0 && day <=31;}
-};
-
-
-
-struct TimeValue {
-    int hour = 0;
-    int minute = 0;
-    int second = 0;
-    bool operator == (const TimeValue &) const = default;
-    std::strong_ordering operator <=> (const TimeValue &) const = default;
-};
-
-using ValueBase = std::variant<std::monostate,
-                               double,
-                               int,
-                               long,
-                               bool,
-                               DateValue,
-                               TimeValue,
-                               std::span<Value> >;
-
-
-class Value : public ValueBase {
-public:
-    using ValueBase::ValueBase;
-};
 
 
 enum class SubscriptionType {
@@ -81,7 +46,7 @@ public:
     ///Place an order
     virtual Order place(const Instrument &instrument, const Order::Setup &setup) = 0;
 
-    ///Creates an order, which is asociated with an instrument, but it is not placed
+    ///Creates and bind an order to an instrument
     /**
      * You can use replace() function to place the order with new setup. This
      * allows to track single order without need to know, whether order is actually
@@ -90,7 +55,7 @@ public:
      * @param instrument associated instrument
      * @return dummy order (can be replaced)
      */
-    virtual Order create(const Instrument &instrument) = 0;
+    virtual Order bind_order(const Instrument &instrument) = 0;
 
     ///Cancel given order
     virtual void cancel(const Order &order) = 0;
@@ -117,9 +82,6 @@ public:
     ///get persistent variable
     virtual Value get_var(int idx) const = 0;
 
-    ///retrive strategy parameter (from config)
-    virtual Value get_param(std::string_view varname) const = 0;
-
     ///allocate equity on given account
     virtual void allocate(const Account &a, double equity) = 0;
 
@@ -145,13 +107,12 @@ public:
     virtual Timestamp now() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual void update_account(const Account &, CompletionCB) override{throw_error();}
-    virtual Order create(const Instrument &)override{throw_error();}
+    virtual Order bind_order(const Instrument &)override{throw_error();}
     virtual Order place(const Instrument &,
             const Order::Setup &) override{throw_error();}
     virtual void allocate(const Account &, double ) override {throw_error();}
     virtual Value get_var(int ) const override  {throw_error();}
     virtual void set_var(int  , const Value &) override {throw_error();}
-    virtual Value get_param(std::string_view ) const override {throw_error();}
     virtual void subscribe(SubscriptionType , const Instrument &, TimeSpan ) override {throw_error();}
     virtual void unsubscribe(SubscriptionType , const Instrument &) override {throw_error();}
     constexpr virtual ~NullContext() {}
@@ -159,14 +120,13 @@ public:
 };
 
 
-class Context {
+template<typename PtrType>
+class ContextT {
 public:
 
-    static constexpr NullContext null_context = {};
     static std::shared_ptr<IContext> null_context_ptr;
 
-    Context():_ptr(null_context_ptr) {}
-    Context(std::shared_ptr<IContext> ptr):_ptr(std::move(ptr)) {}
+    ContextT(PtrType ptr):_ptr(std::move(ptr)) {}
 
     template<typename Ctx>
     class Variable {
@@ -232,11 +192,6 @@ public:
     requires std::same_as<std::underlying_type_t<T>, int>
     auto operator[](T name) const {
         return Variable<const IContext>(_ptr.get(), static_cast<int>(name));
-    }
-
-    ///access to configuration
-    Value operator()(std::string_view name) const {
-        return _ptr->get_param(name);
     }
 
     ///request update account
@@ -355,7 +310,7 @@ public:
      * @param instrument associated instrument
      * @return dummy order (can be replaced)
      */
-    Order create(const Instrument &instrument) {return _ptr->create(instrument);}
+    Order bind_order(const Instrument &instrument) {return _ptr->bind_order(instrument);}
     ///Cancel given order
     void cancel(const Order &order) {_ptr->cancel(order);}
 
@@ -452,10 +407,20 @@ public:
 
 
 protected:
-    std::shared_ptr<IContext> _ptr;
+    PtrType _ptr;
 };
 
-inline std::shared_ptr<IContext> Context::null_context_ptr = {const_cast<NullContext *>(&Context::null_context), [](auto){}};
+class Context : public ContextT<IContext *> {
+public:
+
+    static constexpr NullContext null_context = {};
+
+    using ContextT<IContext *>::ContextT;
+    Context():ContextT<IContext *>(const_cast<NullContext *>(&null_context)) {}
+
+};
+
+
 
 }
 

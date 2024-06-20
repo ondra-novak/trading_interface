@@ -18,6 +18,7 @@ public:
     using InstrumentList = std::vector<Instrument>;
 
 
+
     virtual ~IStrategy() = default;
 
     ///clone strategy state (need for speculative simulation)
@@ -39,7 +40,7 @@ public:
      * You can get list of accounts by enumerating instruments. Each instrument
      * has associated account.
      */
-    virtual void on_init(Context ctx, InstrumentList instruments) = 0;
+    virtual void on_init(Context ctx, Config config, InstrumentList instruments) = 0;
 
     ///called when ticker changes (market triggers)
     /**

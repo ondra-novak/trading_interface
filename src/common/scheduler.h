@@ -1,5 +1,7 @@
 #pragma once
 
+#include "priority_queue.h"
+
 #include <chrono>
 #include <cstdint>
 #include "../trading_ifc/function.h"
@@ -8,7 +10,6 @@
 #include <vector>
 #include <stop_token>
 #include <condition_variable>
-#include "heap_utility.h"
 
 namespace trading_api {
 
@@ -56,19 +57,23 @@ protected:
         Timestamp tp;
         TimerID id;
         Runnable r;
-        static bool ordering(const TimedEvent &a, const TimedEvent &b);
+        struct ordering {
+            bool operator()(const TimedEvent &a, const TimedEvent &b) const;
+        };
     };
 
     struct CollapsableEvent {
         EventSeverityID event_id;
         Runnable r;
-        static bool ordering(const CollapsableEvent &a, const CollapsableEvent &b);
+        struct ordering {
+            bool operator()(const CollapsableEvent &a, const CollapsableEvent &b) const;
+        };
     };
 
     std::mutex _mx;
     std::queue<Runnable> _queue;
-    std::vector<CollapsableEvent> _collapsable_queue;
-    std::vector<TimedEvent> _timed_queue;
+    PriorityQueue<CollapsableEvent, CollapsableEvent::ordering> _collapsable_queue;
+    PriorityQueue<TimedEvent, TimedEvent::ordering> _timed_queue;
     TimerID _id_counter = 0;
     Notify _ntf = [](Timestamp) {};
     Timestamp _next_notify = Timestamp::max();

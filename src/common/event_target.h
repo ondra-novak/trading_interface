@@ -42,7 +42,7 @@ public:
     virtual void on_event(Order ord) = 0;
 
     ///called when fill is detected
-    virtual void on_event(Order ord, Fill fill) = 0;
+    virtual void on_event(Order ord, const Fill &fill) = 0;
 
 
 };

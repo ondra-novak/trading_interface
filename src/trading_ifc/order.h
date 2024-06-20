@@ -251,7 +251,10 @@ public:
     virtual double get_filled() const override {return 0.0;}
     virtual Reason get_reason() const override {return Reason::no_reason;}
     virtual Instrument get_instrument() const override {return {};}
-    virtual const Setup &get_setup() const override {return {};}
+    virtual const Setup &get_setup() const override {
+        static Setup empty;
+        return empty;
+    }
     constexpr virtual ~NullOrder() override {}
 };
 

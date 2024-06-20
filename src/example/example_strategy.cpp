@@ -8,7 +8,7 @@ public:
     virtual void on_orderbook(Instrument i, const OrderBook &tk) override;
     virtual PStrategy clone() override {return do_clone(this);}
     virtual void on_timer(TimerID id) override;
-    virtual void on_init(Context ctx, InstrumentList instruments) override;
+    virtual void on_init(Context ctx, Config config, InstrumentList instruments) override;
     virtual void on_fill(Order ord, Fill fill)
             override;
     virtual void on_order(Order ord) override;
@@ -24,7 +24,7 @@ void strategy_main(Module &m) {
 inline void Example::on_timer(TimerID id) {
 }
 
-inline void Example::on_init(Context ctx, InstrumentList instruments) {
+inline void Example::on_init(Context ctx, Config config, InstrumentList instruments) {
 }
 
 inline void Example::on_fill(Order ord, Fill fill) {

@@ -16,8 +16,7 @@ void Scheduler::enqueue_collapse(EventSeverityID event_id, Runnable r) {
     if (iter != _collapsable_queue.end()) {
         iter->r = std::move(r);
     } else {
-        _collapsable_queue.push_back(CollapsableEvent{event_id, std::move(r)});
-        std::push_heap(_collapsable_queue.begin(), _collapsable_queue.end(), CollapsableEvent::ordering);
+        _collapsable_queue.push({event_id, std::move(r)});
         notify();
     }
 
@@ -26,8 +25,7 @@ void Scheduler::enqueue_collapse(EventSeverityID event_id, Runnable r) {
 Scheduler::TimerID Scheduler::enqueue_timed(Timestamp tp, Runnable r) {
     std::lock_guard _(_mx);
     TimerID id = ++_id_counter;
-    _timed_queue.push_back(TimedEvent{tp, id, std::move(r)});
-    std::push_heap(_timed_queue.begin(), _timed_queue.end(), TimedEvent::ordering);
+    _timed_queue.push({tp, id, std::move(r)});
     notify();
     return id;
 }
@@ -38,26 +36,11 @@ bool Scheduler::cancel_timed(TimerID id) {
     auto iter = std::find_if(_timed_queue.begin(), _timed_queue.end(),
             [&](const TimedEvent &ev){return ev.id == id;});
     if (iter == _timed_queue.end()) return false;
-    if (iter == _timed_queue.begin()) {
-        std::pop_heap(_timed_queue.begin(), _timed_queue.end(), TimedEvent::ordering);
-        _timed_queue.pop_back();
-        return true;
-    } else {
-        TimedEvent &a = *iter;
-        TimedEvent &b = _timed_queue.back();
-        if (&a != &b) {
-            std::swap(a,b);
-            _timed_queue.pop_back();
-            std::make_heap(_timed_queue.begin(), _timed_queue.end(), TimedEvent::ordering);
-        } else {
-            _timed_queue.pop_back();
-        }
-        return true;
-    }
-
+    _timed_queue.erase(iter);
+    return true;
 }
 
-bool Scheduler::TimedEvent::ordering(const TimedEvent &a, const TimedEvent &b) {
+bool Scheduler::TimedEvent::ordering::operator()(const TimedEvent &a, const TimedEvent &b) const {
     return a.tp > b.tp;
 }
 
@@ -86,15 +69,13 @@ Scheduler::Timestamp Scheduler::wakeup_internal(std::unique_lock<std::mutex> &lk
         lk.lock();
     } else if (_collapsable_queue.empty()) {
         Runnable r = std::move(_collapsable_queue.front().r);
-        std::pop_heap(_collapsable_queue.begin(), _collapsable_queue.end(), CollapsableEvent::ordering);
-        _collapsable_queue.pop_back();
+        _collapsable_queue.pop();
         lk.unlock();
         r();
         lk.lock();
     } else if (!_timed_queue.empty() && _timed_queue.front().tp <= cur_time) {
         Runnable r = std::move(_timed_queue.front().r);
-        std::pop_heap(_timed_queue.begin(), _timed_queue.end(), TimedEvent::ordering);
-        _collapsable_queue.pop_back();
+        _timed_queue.pop();
         lk.unlock();
         r();
         lk.lock();
@@ -103,8 +84,8 @@ Scheduler::Timestamp Scheduler::wakeup_internal(std::unique_lock<std::mutex> &lk
     return _next_notify;
 }
 
-bool Scheduler::CollapsableEvent::ordering(
-        const CollapsableEvent &a, const CollapsableEvent &b) {
+bool Scheduler::CollapsableEvent::ordering::operator()(
+        const CollapsableEvent &a, const CollapsableEvent &b) const {
     return a.event_id < b.event_id;
 }
 
