@@ -12,7 +12,7 @@ public:
     virtual void on_fill(Order ord, Fill fill)
             override;
     virtual void on_order(Order ord) override;
-    virtual StrategyConfigDesc get_config_desc() const override;
+    virtual StrategyConfigSchema get_config_schema() const override;
 };
 
 
@@ -39,7 +39,7 @@ inline void Example::on_ticker(Instrument i, const Ticker &tk) {
 inline void Example::on_orderbook(Instrument i, const OrderBook &tk) {
 }
 
-StrategyConfigDesc Example::get_config_desc() const {
+StrategyConfigSchema Example::get_config_schema() const {
     using namespace trading_api::params;
     return {
         Group("gr1",{

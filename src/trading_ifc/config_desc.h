@@ -192,11 +192,11 @@ inline Group::~Group() {}
 
 }
 
-class StrategyConfigDesc {
+class StrategyConfigSchema {
 public:
     std::vector<params::Control> controls;
 
-    StrategyConfigDesc(std::initializer_list<params::Control> controls)
+    StrategyConfigSchema(std::initializer_list<params::Control> controls)
         :controls(controls.begin(), controls.end()) {}
 
 };

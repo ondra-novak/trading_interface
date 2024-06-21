@@ -3,7 +3,7 @@
 namespace trading_api {
 
 template<typename ... SkipTypes>
-json::value config_desc_to_json_t(const std::vector<params::Control> &controls, unsigned int level);
+json::value config_schema_to_json_t(const std::vector<params::Control> &controls, unsigned int level);
 
 inline constexpr params::Options default_opts = {};
 inline constexpr params::VisibilityControl default_vc = {};
@@ -94,7 +94,7 @@ static json::value range_to_json(const params::TimeRange &r) {
 
 
 static json::value control_to_json(const params::Group &grp, unsigned int level) {
-    auto controls = config_desc_to_json_t<params::Section>(grp.controls, level+1);
+    auto controls = config_schema_to_json_t<params::Section>(grp.controls, level+1);
     return {
         {"class","group"},
         {"name",grp.name},
@@ -104,7 +104,7 @@ static json::value control_to_json(const params::Group &grp, unsigned int level)
 }
 
 static json::value control_to_json(const params::Compound &grp, unsigned int level) {
-    auto controls = config_desc_to_json_t<params::Section, params::Group>(grp.controls, level+1);
+    auto controls = config_schema_to_json_t<params::Section, params::Group>(grp.controls, level+1);
     return {
         {"class","compound"},
         {"controls",json::value(controls.begin(), controls.end())},
@@ -113,7 +113,7 @@ static json::value control_to_json(const params::Compound &grp, unsigned int lev
 }
 
 static json::value control_to_json(const params::Section &grp, unsigned int level) {
-    auto controls = config_desc_to_json_t<params::Section>(grp.controls, level+1);
+    auto controls = config_schema_to_json_t<params::Section>(grp.controls, level+1);
     return {
         {"class","section"},
         {"name",grp.name},
@@ -219,7 +219,7 @@ static json::value control_to_json(const params::TimeZoneSelect &n, unsigned int
 
 
 template<typename ... SkipTypes>
-json::value config_desc_to_json_t(const std::vector<params::Control> &controls, unsigned int level) {
+json::value config_schema_to_json_t(const std::vector<params::Control> &controls, unsigned int level) {
 
     std::vector<json::value> values;
     values.reserve(controls.size());
@@ -234,13 +234,13 @@ json::value config_desc_to_json_t(const std::vector<params::Control> &controls, 
 
 }
 
-json::value config_desc_to_json(const StrategyConfigDesc &desc) {
-    return config_desc_to_json_t<void>(desc.controls,0 );
+json::value config_schema_to_json(const StrategyConfigSchema &desc) {
+    return config_schema_to_json_t<void>(desc.controls,0 );
 }
 
 
 json::value config_desc_to_json(const IStrategy *strategy) {
-    return config_desc_to_json(strategy->get_config_desc());
+    return config_schema_to_json(strategy->get_config_schema());
 }
 
 }

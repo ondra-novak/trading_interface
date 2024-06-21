@@ -29,7 +29,7 @@ public:
     static PStrategy do_clone(const X *me) {return std::make_unique<X>(*me);}
 
 
-    virtual StrategyConfigDesc get_config_desc() const = 0;
+    virtual StrategyConfigSchema get_config_schema() const = 0;
 
 
     ///called on initialization

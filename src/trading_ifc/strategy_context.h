@@ -14,7 +14,6 @@ namespace trading_api {
 using CompletionCB = Function<void()>;
 
 
-using Fills = std::vector<Fill>;
 
 
 enum class SubscriptionType {
@@ -73,8 +72,11 @@ public:
      */
     virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) = 0;
 
-    ///Retrieve last fills
+    ///Retrieve recent fills
     virtual Fills get_fills(std::size_t limit) = 0;
+
+    ///Retrieve recent fills
+    virtual Fills get_fills(Timestamp tp) = 0;
 
     ///set persistent variable
     virtual void set_var(int idx, const Value &val) = 0;
@@ -86,7 +88,7 @@ public:
     virtual void allocate(const Account &a, double equity) = 0;
 
     ///subscribe market events
-    virtual void subscribe(SubscriptionType type, const Instrument &i, TimeSpan interval) = 0;
+    virtual void subscribe(SubscriptionType type, const Instrument &i) = 0;
 
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
@@ -104,6 +106,7 @@ public:
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
     virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
     virtual Fills get_fills(std::size_t ) override{throw_error();}
+    virtual Fills get_fills(Timestamp ) override{throw_error();}
     virtual Timestamp now() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual void update_account(const Account &, CompletionCB) override{throw_error();}
@@ -113,7 +116,7 @@ public:
     virtual void allocate(const Account &, double ) override {throw_error();}
     virtual Value get_var(int ) const override  {throw_error();}
     virtual void set_var(int  , const Value &) override {throw_error();}
-    virtual void subscribe(SubscriptionType , const Instrument &, TimeSpan ) override {throw_error();}
+    virtual void subscribe(SubscriptionType , const Instrument &) override {throw_error();}
     virtual void unsubscribe(SubscriptionType , const Instrument &) override {throw_error();}
     constexpr virtual ~NullContext() {}
 
@@ -343,6 +346,10 @@ public:
     ///Retrieve last fills
     Fills get_fills(std::size_t limit) {
         return _ptr->get_fills(limit);
+    }
+
+    Fills get_fills(Timestamp tp) {
+        return _ptr->get_fills(tp);
     }
 
     ///allocate equity for current strategy

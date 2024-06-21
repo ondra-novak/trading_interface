@@ -11,6 +11,7 @@ namespace trading_api {
 
 class Instrument;
 
+using SerializedOrder = std::string;
 
 class IOrder {
 public:
@@ -67,6 +68,19 @@ public:
         hedge,
         ///reduce position, prevent to go other side (you need to SELL on long, BUY on short)
         reduce
+    };
+
+    enum class Origin {
+        ///Unknown origin (there is no evidence who is responsible for creation of this order)
+        unknown,
+        ///Order has been created by this strategy instance
+        strategy,
+        ///Order has been restored from permanent storage
+        restored,
+        ///Order is liquidation order issued by exchange
+        liquidation,
+        ///Order is probably made manually by user intervention
+        manual,
     };
 
     ///Order is undefined
@@ -228,6 +242,11 @@ public:
 
     ///retrieve order's initial setup
     virtual const Setup &get_setup() const = 0;
+
+    ///retrieve binary representation
+    virtual SerializedOrder to_binary() const = 0;
+
+    virtual Origin get_origin() const = 0;
 };
 
 template<typename T>
@@ -251,6 +270,8 @@ public:
     virtual double get_filled() const override {return 0.0;}
     virtual Reason get_reason() const override {return Reason::no_reason;}
     virtual Instrument get_instrument() const override {return {};}
+    virtual SerializedOrder to_binary() const override {return {};}
+    virtual Origin get_origin() const override {return Origin::unknown;};
     virtual const Setup &get_setup() const override {
         static Setup empty;
         return empty;
@@ -280,6 +301,7 @@ public:
     using ClosePosition = IOrder::ClosePosition;
     using Behavior = IOrder::Behavior;
     using Options = IOrder::Options;
+    using Origin = IOrder::Origin;
 
     explicit operator bool() const {return _ptr != null_order_ptr;}
     bool defined() const {return _ptr != null_order_ptr;}
@@ -361,6 +383,37 @@ public:
     bool pending() const {return get_state() == Order::State::pending;}
     ///returns true, if order is canceled
     bool canceled() const {return get_state() == Order::State::canceled;}
+
+    ///Retrieve serialized binary content of the order
+    /**
+     * @return a binary representation of the order in format specific to
+     * service provider. The returned information can be used to
+     * store order permanently (for example in database) and use this
+     * information to restore the state of the order when connection
+     * to the exchange is reestablished.
+     *
+     * The strategy retrieves state of all stored orders after init() through
+     * on_order or on_fill
+     */
+    SerializedOrder to_binary() const {
+        return _ptr->to_binary();
+    }
+
+    ///Retrieves order's origin (who created this order)
+    /**
+     * The strategy can receive orders that was not created by them. This
+     * function returns information about who is responsible for creation
+     * of this order.
+     *
+     * For example if the unexcpected order has origin `restored` the strategy
+     * knows, that this order was created by previous instance, so it
+     * can adapt its state and include this order to calculations
+     *
+     * @return order's origin
+     */
+    Origin get_origin() const {
+        return _ptr->get_origin();
+    }
 
     struct Hasher {
         auto operator()(const Order &ord) const {

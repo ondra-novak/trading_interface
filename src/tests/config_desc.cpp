@@ -12,8 +12,8 @@ int main() {
     CHECK(module != nullptr);
     auto strategy = module->create_strategy("example");
     CHECK(strategy.get() != nullptr);
-    auto config = strategy->get_config_desc();
-    auto json = trading_api::config_desc_to_json(config);
+    auto config = strategy->get_config_schema();
+    auto json = trading_api::config_schema_to_json(config);
     std::cout << json.to_json() << std::endl;
 
 
