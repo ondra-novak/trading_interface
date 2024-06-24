@@ -7,6 +7,7 @@
 #include "../trading_ifc/ticker.h"
 #include "../trading_ifc/order.h"
 #include "../trading_ifc/fill.h"
+#include "../trading_ifc/function.h"
 
 namespace trading_api {
 
@@ -16,6 +17,8 @@ class IEventTarget;
 
 using PEventTarget = std::shared_ptr<IEventTarget>;
 using WPEventTarget = std::weak_ptr<IEventTarget>;
+using OrderUpdateCB = Function<Order(),3*sizeof(void*)>;
+using OrderFillUpdateCB = Function<std::pair<Order,Fill>(),3*sizeof(void*)>;
 
 ///Represents strategy (with context) from service provider side
 /**
@@ -39,10 +42,10 @@ public:
     virtual void on_event(Instrument i, const OrderBook &ord) = 0;
 
     ///called when order state changed
-    virtual void on_event(Order ord) = 0;
+    virtual void on_event(OrderUpdateCB fn) = 0;
 
     ///called when fill is detected
-    virtual void on_event(Order ord, const Fill &fill) = 0;
+    virtual void on_event(OrderFillUpdateCB fn) = 0;
 
 
 };

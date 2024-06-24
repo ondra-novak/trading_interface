@@ -34,8 +34,8 @@ public:
             const Config &config);
 
 
-    virtual void on_event(Order ord, const Fill &fill) override;
-    virtual void on_event(Order ord) override;
+    virtual void on_event(OrderFillUpdateCB ordcb) override;
+    virtual void on_event(OrderUpdateCB ordcb) override;
     virtual void on_event(Instrument i, const OrderBook &ord) override;
     virtual void on_event(Instrument i) override;
     virtual void on_event(Instrument i, const Ticker &tk) override;
@@ -123,18 +123,19 @@ void BasicContext<S,E>::reschedule(Timestamp tp) {
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(Order ord,const Fill &fill) {
-    _sch.enqueue([this,ord, fill = Fill(fill)]{
+void BasicContext<S,E>::on_event(OrderFillUpdateCB ordcb) {
+    _sch.enqueue([this,ordcb = std::move(ordcb)]() mutable {
+        auto [order, fill] = ordcb();
         if (_storage.store_fill(fill)) {    //check for duplicate
-            _strategy->on_fill(ord, fill);
+            _strategy->on_fill(order, fill);
         }
     });
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(Order ord) {
-    _sch.enqueue([this, ord]{
-        _strategy->on_order(ord);
+void BasicContext<S,E>::on_event(OrderUpdateCB ord) {
+    _sch.enqueue([this, ord = std::move(ord)]() mutable {
+        _strategy->on_order(ord());
     });
 }
 

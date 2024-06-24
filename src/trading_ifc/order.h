@@ -299,6 +299,7 @@ public:
     using TpSl = IOrder::TpSl;
     using TrailingStop = IOrder::TrailingStop;
     using ClosePosition = IOrder::ClosePosition;
+    using Transfer = IOrder::Transfer;
     using Behavior = IOrder::Behavior;
     using Options = IOrder::Options;
     using Origin = IOrder::Origin;

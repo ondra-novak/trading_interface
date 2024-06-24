@@ -6,6 +6,7 @@ set(testFiles
 	compile_test.cpp
 	loader.cpp
 	config_desc.cpp
+	wandering_bst.cpp
 )
 
 link_libraries(

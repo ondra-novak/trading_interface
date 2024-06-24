@@ -1,7 +1,7 @@
 #pragma once
 
 #include "event_target.h"
-#include "../trading_ifc/order.h"
+#include "../trading_ifc/strategy_context.h"
 
 #include <span>
 
