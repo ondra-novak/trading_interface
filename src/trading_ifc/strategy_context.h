@@ -13,6 +13,9 @@ namespace trading_api {
 
 using CompletionCB = Function<void()>;
 
+template<typename T>
+concept BinarySerializable = std::is_trivially_copy_constructible_v<T>;
+
 
 
 
@@ -73,16 +76,27 @@ public:
     virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) = 0;
 
     ///Retrieve recent fills
-    virtual Fills get_fills(std::size_t limit) = 0;
+    virtual Fills get_fills(const Instrument &i, std::size_t limit) const = 0;
 
     ///Retrieve recent fills
-    virtual Fills get_fills(Timestamp tp) = 0;
+    virtual Fills get_fills(const Instrument &i, Timestamp tp) const = 0;
 
     ///set persistent variable
-    virtual void set_var(int idx, const Value &val) = 0;
+    /**
+     * It is expected, that key-value database is involved.
+     * @param var_name variable name - any binary content is allowed
+     * @param value value as string - any binary content is allowed
+     */
+    virtual void set_var(std::string_view var_name, std::string_view value) = 0;
 
-    ///get persistent variable
-    virtual Value get_var(int idx) const = 0;
+    ///Deletes persistently stored variable
+    /**
+     * @param var_name name of variable.
+     *
+     * @note Deleted variable releases some space in database and it
+     * also stops appearing in list of variables supplied during init()
+     */
+    virtual void unset_var(std::string_view var_name) = 0;
 
     ///allocate equity on given account
     virtual void allocate(const Account &a, double equity) = 0;
@@ -93,9 +107,6 @@ public:
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
 
-
-
-
 };
 
 class NullContext: public IContext {
@@ -105,8 +116,8 @@ public:
     virtual void cancel(const Order &) override {throw_error();}
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
     virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
-    virtual Fills get_fills(std::size_t ) override{throw_error();}
-    virtual Fills get_fills(Timestamp ) override{throw_error();}
+    virtual Fills get_fills(const Instrument &, std::size_t ) const override{throw_error();}
+    virtual Fills get_fills(const Instrument &, Timestamp )const  override{throw_error();}
     virtual Timestamp now() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual void update_account(const Account &, CompletionCB) override{throw_error();}
@@ -114,8 +125,8 @@ public:
     virtual Order place(const Instrument &,
             const Order::Setup &) override{throw_error();}
     virtual void allocate(const Account &, double ) override {throw_error();}
-    virtual Value get_var(int ) const override  {throw_error();}
-    virtual void set_var(int  , const Value &) override {throw_error();}
+    virtual void set_var(std::string_view , std::string_view ) override{throw_error();};
+    virtual void unset_var(std::string_view ) override{throw_error();};
     virtual void subscribe(SubscriptionType , const Instrument &) override {throw_error();}
     virtual void unsubscribe(SubscriptionType , const Instrument &) override {throw_error();}
     constexpr virtual ~NullContext() {}
@@ -131,70 +142,26 @@ public:
 
     ContextT(PtrType ptr):_ptr(std::move(ptr)) {}
 
-    template<typename Ctx>
-    class Variable {
-    public:
-
-        template<std::convertible_to<Value> T>
-        requires (!std::is_const_v<Ctx>)
-        const T &operator=(const T &x) {
-            ctx->set_var(var, Value(x));
-        }
-
-        template<std::same_as<std::nullptr_t> T>
-        requires (!std::is_const_v<Ctx>)
-        T operator=(T) {
-            ctx->set_var(var, Value());
-        }
-
-
-        template<typename T>
-        operator T() const {
-            return std::visit([](const auto &x)->T{
-                if constexpr (std::is_constructible_v<T, decltype(x)>) {
-                    return T(x);
-                } else {
-                    return T();
-                }
-            }, ctx->get_var(var));
-        }
-        template<typename T>
-        T operator()(const T &def_val) const {
-            return std::visit([&](const auto &x)->T{
-                if constexpr (std::is_constructible_v<T, decltype(x)>) {
-                    return T(x);
-                } else {
-                    return def_val;
-                }
-            }, ctx->get_var(var));
-        }
-
-        ///retrieve array value (with default value which is empty array)
-        template<typename T>
-        T operator()() const {
-            return operator()(std::span<Value>());
-        }
-
-
-    protected:
-        Variable (Ctx *ctx, int var)
-            :ctx(ctx),var(var) {}
-        Ctx *ctx;
-        int var;
-        friend class Context;
-    };
-
-    ///access to permanent storage
-    template<typename T>
-    requires std::same_as<std::underlying_type_t<T>, int>
-    auto operator[](T name) {
-        return Variable<IContext>(_ptr.get(), static_cast<int>(name));
+    ///store value under a variable name in a persistent storage
+    /**
+     * Key-Value database is involved.
+     *
+     * @param key a string key under which the value will be stored
+     * @param value a string value to be stored
+     *
+     * @note There is no limitation for key and value. You can use binary
+     * content for both key and value. There is also no limit of size. However
+     * keep in mind, that to store longer keys and values can have impact on
+     * performance.
+     */
+    void store(std::string_view key, std::string_view value) {
+        _ptr->set_var(key, value);
     }
-    ///access to permanent storage
-    template<typename T>
-    requires std::same_as<std::underlying_type_t<T>, int>
-    auto operator[](T name) const {
-        return Variable<const IContext>(_ptr.get(), static_cast<int>(name));
+
+    template<BinarySerializable T>
+    void store(std::string_view key, const T &value) {
+        std::string_view binstr(reinterpret_cast<const char *>(&value), sizeof(T));
+        _ptr->set_var(key, binstr);
     }
 
     ///request update account
@@ -344,12 +311,12 @@ public:
     }
 
     ///Retrieve last fills
-    Fills get_fills(std::size_t limit) {
-        return _ptr->get_fills(limit);
+    Fills get_fills(const Instrument &i, std::size_t limit) {
+        return _ptr->get_fills(i, limit);
     }
 
-    Fills get_fills(Timestamp tp) {
-        return _ptr->get_fills(tp);
+    Fills get_fills(const Instrument &i, Timestamp tp) {
+        return _ptr->get_fills(i, tp);
     }
 
     ///allocate equity for current strategy
@@ -427,6 +394,77 @@ public:
 
 };
 
+class Variables {
+public:
+
+    struct Value {
+        const std::optional<std::string_view> v = {};
+        operator std::string_view() const {
+            return v.has_value()?*v:std::string_view();}
+
+        template<BinarySerializable T>
+        operator T() const {
+            return v.has_value() && sizeof(T) == v->size()?
+                    *reinterpret_cast<const T *>(v->data()):T();
+        }
+
+        std::string_view operator()(std::string_view defval) const {
+            return v.has_value()?*v:defval;
+        }
+        template<BinarySerializable T>
+        std::string_view operator()(const T &defval) const {
+            return v.has_value() && sizeof(T) == v->size()?
+                    *reinterpret_cast<const T *>(v->data()):defval;
+        }
+
+        bool operator !() const {
+            return !v.has_value();
+        }
+
+        Value() = default;
+        Value(const std::string &v):v(v) {}
+        Value(const std::string_view &v):v(v) {}
+    };
+
+    Value operator[](std::string_view key) const {
+        auto iter = _variables.find(key);
+        if (iter == _variables.end()) return {};
+        else return Value(iter->second);
+    }
+
+    auto begin() const {
+        return _variables.begin();
+    }
+    auto end() const {
+        return _variables.end();
+    }
+
+    auto prefix(std::string_view pfx) {
+        if (pfx.empty()) return std::pair(begin(), end());
+        auto low = _variables.lower_bound(pfx);
+        std::string pfx_end = end_of_range(pfx);
+        auto high = pfx.empty()?end():_variables.upper_bound(pfx_end);
+        return std::pair(low,high);
+    }
+
+    const std::map<std::string, std::string, std::less<> > _variables;
+protected:
+    std::string end_of_range(std::string_view pfx) {
+        std::string out;
+        while (!pfx.empty()) {
+            unsigned char c = pfx.back();
+            constexpr unsigned char last_code = 0xFF;
+            pfx = pfx.substr(0, pfx.length()-1);
+            if (c != last_code) {
+                ++c;
+                out = pfx;
+                out.push_back(c);
+                break;
+            }
+        }
+        return out;
+    }
+};
 
 
 }

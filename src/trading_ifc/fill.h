@@ -38,6 +38,9 @@ struct Fill {
      */
     std::string order_id;
 
+    ///associated instrument identifier
+    std::string instrument_id;
+
     ///Price of this fill
     double price;
     ///Amount exchanged

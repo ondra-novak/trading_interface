@@ -22,6 +22,9 @@ public:
     static constexpr Scheduler::EventSeverityID ticker_id = 1;
     static constexpr Scheduler::EventSeverityID orderbook_id = 2;
 
+    virtual void unset_var(std::string_view var_name) override;
+    virtual void set_var(std::string_view var_name, std::string_view value)
+            override;
 
     BasicContext() = default;
     ~BasicContext();
@@ -31,19 +34,20 @@ public:
             ContextScheduler *ctx_sch,
             Storage storage,
             Exchange exchange,
-            const Config &config);
+            Config config);
 
 
-    virtual void on_event(OrderFillUpdateCB ordcb) override;
-    virtual void on_event(OrderUpdateCB ordcb) override;
-    virtual void on_event(Instrument i, const OrderBook &ord) override;
-    virtual void on_event(Instrument i) override;
-    virtual void on_event(Instrument i, const Ticker &tk) override;
-    virtual void on_event(Account a) override;
+    virtual void on_event(const Instrument &i) override;
+    virtual void on_event(const Account &a) override;
+    virtual void on_event(const Instrument &i, const Ticker &tk) override;
+    virtual void on_event(const Instrument &i, const OrderBook &ord) override;
+    virtual void on_event(const PBasicOrder &order, Order::State state) override;
+    virtual void on_event(const PBasicOrder &order, Order::State state, Order::Reason reason, const std::string &message) override;
+    virtual void on_event(const PBasicOrder &order, const Fill &fill) override;
     virtual void subscribe(SubscriptionType type, const Instrument &i)override;
     virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) override;
-    virtual Fills get_fills(std::size_t limit) override;
-    virtual Fills get_fills(Timestamp tp) override;
+    virtual Fills get_fills(const Instrument &i, std::size_t limit) const override ;
+    virtual Fills get_fills(const Instrument &i, Timestamp tp) const override ;
     virtual Order place(const Instrument &instrument, const Order::Setup &setup) override;
     virtual void cancel(const Order &order) override;
     virtual TimerID set_timer(Timestamp at, CompletionCB fnptr) override;
@@ -53,9 +57,7 @@ public:
     virtual void update_account(const Account &a, CompletionCB complete_ptr) override;
     virtual void allocate(const Account &a, double equity) override;
     virtual bool clear_timer(TimerID id) override;
-    virtual Value get_var(int idx) const override;
     virtual void update_instrument(const Instrument &i, CompletionCB complete_ptr) override;
-    virtual void set_var(int idx, const Value &val) override;
 
 protected:
 
@@ -77,12 +79,20 @@ protected:
     std::multimap<Instrument, CompletionCB> _cb_update_instrument;
     std::vector<CompletionCB> _cb_tmp;
 
+    std::vector<PBasicOrder> _batch_place;
+    std::vector<PCBasicOrder> _batch_cancel;
+    std::optional<typename Storage::Transaction> _trn;
 
 
     void reschedule(Timestamp tp);
+    void flush_batches();
 
-
-
+    typename Storage::Transaction &get_transaction() {
+        if (!_trn.has_value()) {
+            _trn = _storage.begin_transaction();
+        }
+        return *_trn;
+    }
 };
 
 
@@ -99,7 +109,7 @@ void BasicContext<S,E>::init(std::unique_ptr<IStrategy> strategy,
         ContextScheduler *ctx_sch,
         S storage,
         E exchange,
-        const Config &config) {
+        Config config) {
     strategy = std::move(_strategy);
     _global_scheduler = ctx_sch;
     _reg.wakeup_fn = [this](Timestamp tp){
@@ -108,12 +118,15 @@ void BasicContext<S,E>::init(std::unique_ptr<IStrategy> strategy,
         reschedule(_sch.wakeup(tp, [this](Timestamp tp){
             reschedule(tp);
         }));
+        flush_batches();
     };
     _storage = storage;
     _exchange = exchange;
+    _sch.enqueue([this, config = std::move(config), instruments = std::move(instruments)]{
+        _strategy->on_init(Context(this), config, instruments, _storage.get_variables());
+    });
     auto orders = _storage.get_open_orders();
     _exchange.update_orders(this, {orders.data(), orders.size()});
-    _strategy->on_init(Context(this), config, instruments);
 }
 
 
@@ -123,24 +136,34 @@ void BasicContext<S,E>::reschedule(Timestamp tp) {
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(OrderFillUpdateCB ordcb) {
-    _sch.enqueue([this,ordcb = std::move(ordcb)]() mutable {
-        auto [order, fill] = ordcb();
-        if (_storage.store_fill(fill)) {    //check for duplicate
-            _strategy->on_fill(order, fill);
-        }
+void BasicContext<S,E>::on_event(const PBasicOrder &order, const Fill &fill) {
+    _sch.enqueue([this,order = PBasicOrder(order), fill = Fill(fill)]() mutable {
+        if (_storage.is_duplicate(fill)) return;
+        auto &trn = get_transaction();
+        trn.put(fill);
+        order->add_fill(fill.price, fill.amount);
+        _strategy->on_fill(Order(order), std::move(fill));
     });
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(OrderUpdateCB ord) {
-    _sch.enqueue([this, ord = std::move(ord)]() mutable {
-        _strategy->on_order(ord());
+void BasicContext<S,E>::on_event(const PBasicOrder &order, Order::State state) {
+    _sch.enqueue([this, order = PBasicOrder(order), state]() mutable {
+        order->set_state(state);
+        _strategy->on_order(Order(order));
     });
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(Instrument i, const OrderBook &ord) {
+void BasicContext<S,E>::on_event(const PBasicOrder &order, Order::State state, Order::Reason reason, const std::string &message) {
+    _sch.enqueue([this, order = PBasicOrder(order), state, reason, message = std::string(message)]() mutable {
+        order->set_state(state,reason,message);
+        _strategy->on_order(Order(order));
+    });
+}
+
+template<StorageType S, ExchangeType E>
+void BasicContext<S,E>::on_event(const Instrument &i, const OrderBook &ord) {
     _sch.enqueue_collapse(orderbook_id, [this, i, ord = OrderBook(ord)]{
         _strategy->on_orderbook(i, ord);
     });
@@ -159,7 +182,7 @@ void move_range(MMap &map, std::pair<Iter, Iter> range, std::vector<Target> &out
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(Instrument i) {
+void BasicContext<S,E>::on_event(const Instrument &i) {
     _sch.enqueue([this, i]{
         {
             std::lock_guard _(_cb_mx);
@@ -174,7 +197,7 @@ void BasicContext<S,E>::on_event(Instrument i) {
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(Instrument i, const Ticker &tk) {
+void BasicContext<S,E>::on_event(const Instrument &i, const Ticker &tk) {
     _sch.enqueue_collapse(ticker_id, [this, i, tk = Ticker(tk)]{
         _strategy->on_ticker(i, tk);
     });
@@ -182,7 +205,7 @@ void BasicContext<S,E>::on_event(Instrument i, const Ticker &tk) {
 
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::on_event(Account a) {
+void BasicContext<S,E>::on_event(const Account &a) {
     _sch.enqueue([this, a]{
         {
             std::lock_guard _(_cb_mx);
@@ -200,29 +223,51 @@ void BasicContext<S,E>::subscribe(SubscriptionType type, const Instrument &i) {
     _exchange.subscribe(this, type, i);
 }
 
-template<StorageType S, ExchangeType E>
-Order BasicContext<S,E>::replace(const Order &order, const Order::Setup &setup, bool amend) {
-    return _exchange.replace(this, order, setup, amend);
-}
 
 
 template<StorageType S, ExchangeType E>
-Fills BasicContext<S,E>::get_fills(std::size_t limit) {
-    return _storage.get_fills(limit);
+Fills BasicContext<S,E>::get_fills(const Instrument &i, std::size_t limit) const {
+    return _storage.get_fills(i, limit);
 }
 template<StorageType S, ExchangeType E>
-Fills BasicContext<S,E>::get_fills(Timestamp tp) {
-    return _storage.get_fills(tp);
+Fills BasicContext<S,E>::get_fills(const Instrument &i,Timestamp tp) const {
+    return _storage.get_fills(i, tp);
 }
 template<StorageType S, ExchangeType E>
 Order BasicContext<S,E>::place(const Instrument &instrument, const Order::Setup &setup) {
-    return _exchange.place(this, instrument, setup);
-
+    auto ord = _exchange.create_order(instrument, setup);
+    if (ord->get_state() != Order::State::discarded) {
+        _batch_place.push_back(ord);
+    }
+    return Order(ord);
 }
 
 template<StorageType S, ExchangeType E>
+Order BasicContext<S,E>::replace(const Order &order, const Order::Setup &setup, bool amend) {
+    auto ordptr = std::dynamic_pointer_cast<const BasicOrder>(order.get_handle());
+    if (ordptr) {
+        auto ord = _exchange.create_order_replace(ordptr, setup, amend);
+        if (ord->get_state() != Order::State::discarded) {
+            _batch_place.push_back(ord);
+        }
+        return Order(ord);
+    } else{
+        auto ordptr = std::dynamic_pointer_cast<const AssociatedOrder>(order.get_handle());
+        if (ordptr) {
+            return place(ordptr->get_instrument(), setup);
+        } else {
+            return Order(std::make_shared<ErrorOrder>(order.get_instrument(), Order::Reason::incompatible_order, ""));
+        }
+    }
+}
+
+
+template<StorageType S, ExchangeType E>
 void BasicContext<S,E>::cancel(const Order &order) {
-    _exchange.cancel(order);
+    auto ordptr = std::dynamic_pointer_cast<const BasicOrder>(order.get_handle());
+    if (ordptr) {
+        _batch_cancel.push_back(ordptr);
+    }
 }
 
 template<StorageType S, ExchangeType E>
@@ -269,10 +314,6 @@ bool BasicContext<S,E>::clear_timer(TimerID id) {
     return _sch.cancel_timed(id);
 }
 
-template<StorageType S, ExchangeType E>
-Value BasicContext<S,E>::get_var(int idx) const {
-    return _storage.get_var(idx);
-}
 
 template<StorageType S, ExchangeType E>
 void BasicContext<S,E>::update_instrument(const Instrument &i, CompletionCB complete_ptr) {
@@ -289,10 +330,31 @@ void BasicContext<S,E>::update_instrument(const Instrument &i, CompletionCB comp
 }
 
 template<StorageType S, ExchangeType E>
-void BasicContext<S,E>::set_var(int idx, const Value &val) {
-    _storage.set_var(idx, val);
+void BasicContext<S,E>::flush_batches() {
+    if (!_batch_cancel.empty()) {
+        _exchange.batch_cancel({_batch_cancel.begin(), _batch_cancel.end()});
+    }
+    if (!_batch_place.empty()) {
+        _exchange.batch_place(this, {_batch_place.begin(), _batch_place.end()});
+    }
+    _batch_cancel.clear();
+    _batch_place.clear();
+    if (_trn.has_value()) {
+        _storage.commit(*_trn);
+        _trn.reset();
+    }
 }
 
 
+
+template<StorageType Storage, ExchangeType Exchange>
+inline void BasicContext<Storage, Exchange>::unset_var(std::string_view var_name) {
+    get_transaction().erase(var_name);
+}
+
+template<StorageType Storage, ExchangeType Exchange>
+inline void BasicContext<Storage, Exchange>::set_var(std::string_view var_name, std::string_view value) {
+    get_transaction().put(var_name, value);
+}
 
 }

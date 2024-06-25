@@ -9,9 +9,18 @@
 namespace trading_api {
 
 enum class Side {
+    undefined = 0,
     buy = 1,
     sell = -1
 };
+
+inline Side reverse(Side side) {
+    switch (side) {
+        case Side::buy: return Side::sell;
+        case Side::sell: return Side::buy;
+        default: return side;
+    }
+}
 
 using PositionID = std::intptr_t;
 
@@ -31,7 +40,7 @@ public:
 
     struct Position {
         PositionID id = {};    //id of position
-        Side side;
+        Side side = Side::undefined;
         double amount = 0;      //position size (negative is short)
         double open_price = 0;  //open price (if 0 then unknown)
     };
@@ -79,6 +88,8 @@ public:
     ///Retrieve account's label
     /** Account's label can be defined in config */
     virtual std::string get_label() const = 0;
+
+    virtual Position get_position_by_id(const Instrument &instrument, PositionID id) const = 0;
 };
 
 
@@ -89,7 +100,7 @@ public:
 
     virtual HedgePosition get_hedge_position(const Instrument &) const override {return {};}
     virtual PositionList get_all_positions(const Instrument &) const override {return {};}
-
+    virtual Position get_position_by_id(const Instrument &, PositionID ) const override {return {};}
     virtual std::string get_label() const override {return {};}
     constexpr virtual ~NullAccount() {}
 };
@@ -119,8 +130,51 @@ public:
 
     bool operator==(const Account &other) const = default;
     std::strong_ordering operator<=>(const Account &other) const = default;
-
+    ///Retrieve account's label
+    /** Account's label can be defined in config */
     std::string get_label() const {return _ptr->get_label();}
+
+
+    Info get_info() const {return _ptr->get_info();}
+    ///Retrieves position on given instrument
+    /**
+     * @param instrument instrument.
+     * @return overall position. If exchange tracks each opened position, it
+     * returns overall position where shorts are substracted from longs, etc
+     *
+     * @note short position has negative amount
+     */
+    Position get_position(const Instrument &instrument) const {
+        return _ptr->get_position(instrument);
+    }
+
+    ///Retrieves hedge position info
+    /**
+     * If exchange doesn't support hedge position, it returns overall position
+     * depend on current side
+     * @param instrument instrument
+     * @return overall position for both sides
+     */
+    HedgePosition get_hedge_position(const Instrument &instrument) const {
+        return _ptr->get_hedge_position(instrument);
+    }
+
+    ///Retrieves all positions
+    /**
+     * Can return one position for standard futures, but multiple positions
+     * on CFD
+     *
+     * @param instrument instrument
+     *
+     * @return list of positions
+     */
+    PositionList get_all_positions(const Instrument &instrument) const {
+        return _ptr->get_all_positions(instrument);
+    }
+    ///Retrieve specific position by its ID
+    Position get_position_by_id(const Instrument &instrument, PositionID id) const {
+        return _ptr->get_position_by_id(instrument, id);
+    }
 
 
     struct Hasher {

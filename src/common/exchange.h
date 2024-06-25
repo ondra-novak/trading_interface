@@ -2,6 +2,7 @@
 
 #include "event_target.h"
 #include "../trading_ifc/strategy_context.h"
+#include "basic_order.h"
 
 #include <span>
 
@@ -14,16 +15,19 @@ concept ExchangeType = requires(T exch, IEventTarget *target,
         const Instrument &i,
         const Account &a,
         const Order::Setup &ostp,
-        const Order &ord,
+        const PCBasicOrder &ord,
+        std::span<PBasicOrder> order_batch,
+        std::span<PCBasicOrder> cancel_order_batch,
         double equity,
         bool b) {
     {exch.disconnect(target)};
     {exch.update_orders(target, orders)};
     {exch.subscribe(target, sbstype, i)};
-    {exch.place(target, i, ostp)}->std::same_as<Order>;
-    {exch.replace(target, ord, ostp, b)}->std::same_as<Order>;
+    {exch.create_order(i, ostp)}->std::same_as<PBasicOrder>;
+    {exch.create_order_replace(ord, ostp, b)}->std::same_as<PBasicOrder>;
+    {exch.batch_place(target, order_batch)};
+    {exch.batch_cancel(cancel_order_batch)};
     {exch.unsubscribe(target, sbstype, i)};
-    {exch.cancel(ord)};
     {exch.update_account(target, a)};
     {exch.update_ticker(target, i)};
     {exch.update_instrument(target, i)};
@@ -74,45 +78,35 @@ public:
      */
     void unsubscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
 
-    ///Place new order
+    ///Create order instance - don't place order yet
     /**
-     * @param target target object which consumes updates of placed order
-     * @param instrument instrument
-     * @param order_setup parameters of the order
-     * @return newly created order
+     * @param instrument associated instrument
+     * @param setup order setup
+     * @return pointer to newly created order. In case of error, discarded order must be created
      */
-    Order place(IEventTarget *target, const Instrument &instrument, const Order::Setup &order_setup);
-    ///Replace existing order
+    PBasicOrder create_order(const Instrument &instrument, const Order::Setup &setup);
+
+    ///Create order instance which replaces other order - don't place order yet
     /**
-     * Perform cancel+place (atomically if possible) or amend. You can replace
-     * any order in any state. However if amend is requested only
-     * compatible order can be replaced (same side, type, etc). The amend
-     * operation is also possible on already finished order (which generates also
-     * finished order with same finish reason)
-     *
-     * @param target target object which consumes updates of placed order
-     * @param order order to replace. This order receives cancel state (if not finished yet)
-     * @param order_setup new order setup
-     * @param amend specify true, if you need amend operation. This can speed
-     * up place operation, prevent loosing position in orderbook. Amend operation
-     * limits which orders can be amended. If the amend is not possible, the
-     * order is discarded. If amend is not supported by exchange, it is executed
-     * as cancel+place.
-     * @return new order
-     *
-     * @note if the order is amended (which means, that no new order was created),
-     * the protocol requies, that old order is reported as canceled. If there is
-     * fill on the way, it can happen, that fill will be associated with new
-     * order. It is also possible, that old order and new order shares same order_id
-     * in fill report
+     * @param replace order to replace
+     * @param setup order setup
+     * @param amend try to amend order
+     * @return pointer to newly created order. In case of error, discarded order must be created
      */
-    Order replace(IEventTarget *target, const Order &order, const Order::Setup &order_setup, bool amend);
-    ///Cancel existing order
+    PBasicOrder create_order_replace(const PCBasicOrder &replace, const Order::Setup &setup, bool amend);
+
+    ///Place orders in batch
     /**
-     * You can cancel only pending order. If order is done, no operation is perfomed
-     * @param order order to cancel
+     * @param target event target where these orders belongs
+     * @param orders orders - must be created by create_order
      */
-    void cancel(const Order &order);
+    void batch_place(IEventTarget *target, std::span<PBasicOrder> orders);
+
+    ///Cancel orders in batch
+    /**
+     * @param orders list of orders to cancel
+     */
+    void batch_cancel(std::span<PCBasicOrder> orders);
     ///Request update of ticker
     /**
      * You can request update of a current ticker in case that your strategy doesn't

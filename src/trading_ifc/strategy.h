@@ -18,15 +18,7 @@ public:
     using InstrumentList = std::vector<Instrument>;
 
 
-
     virtual ~IStrategy() = default;
-
-    ///clone strategy state (need for speculative simulation)
-    virtual PStrategy clone() = 0;
-
-    ///helps to write clone function
-    template<typename X>
-    static PStrategy do_clone(const X *me) {return std::make_unique<X>(*me);}
 
 
     virtual StrategyConfigSchema get_config_schema() const = 0;
@@ -35,26 +27,31 @@ public:
     ///called on initialization
     /**
      * @param ctx context - access to market
+     * @param config - strategy configuration
      * @param instruments - list of instruments available for trading
+     * @param variables - object which allows to access permanently stored variables
      *
      * You can get list of accounts by enumerating instruments. Each instrument
      * has associated account.
      */
-    virtual void on_init(Context ctx, Config config, InstrumentList instruments) = 0;
+    virtual void on_init(Context ctx,
+            Config config,
+            InstrumentList instrument,
+            Variables variables) = 0;
 
     ///called when ticker changes (market triggers)
     /**
      * @param i instrument
      * @param tk ticker
      */
-    virtual void on_ticker(Instrument i, const Ticker &tk) = 0;
+    virtual void on_ticker(Instrument i, Ticker tk) = 0;
 
     ///called when orderbook update
     /**
      * @param i instrument
      * @param ord orderbook
      */
-    virtual void on_orderbook(Instrument i, const OrderBook &ord) = 0;
+    virtual void on_orderbook(Instrument i, OrderBook ord) = 0;
 
     ///called when time reached on a timer (set_timer)
     virtual void on_timer(TimerID id) = 0;
@@ -68,6 +65,21 @@ public:
 };
 
 
+class AbstractStrategy: public IStrategy {
+public:
+    virtual StrategyConfigSchema get_config_schema() const override {
+        return {};
+    }
+
+    virtual void on_init(Context ctx,Config config,
+            InstrumentList instrument,Variables variables) override = 0;
+    virtual void on_orderbook(Instrument, OrderBook ) override {}
+    virtual void on_timer(TimerID) override {};
+    virtual void on_ticker(Instrument, Ticker ) override {}
+    virtual void on_fill(Order, Fill) override {}
+    virtual void on_order(Order) override {}
+};
+
 
 class IStrategyFactory {
 public:
@@ -79,6 +91,9 @@ protected:
 
 
 using EntryPointFn = const IStrategyFactory * (*)();
+
+
+
 
 
 

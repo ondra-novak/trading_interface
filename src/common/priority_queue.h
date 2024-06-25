@@ -50,7 +50,6 @@ public:
     }
 
     void priority_altered(typename Super::const_iterator it, bool cmp_result) {
-        std::size_t index = std::distance(Super::cbegin(), it);
         if (cmp_result == true) heapify_down(it);
         else heapify_up(it);
     }

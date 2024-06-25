@@ -18,7 +18,7 @@ Instrument AssociatedOrder::get_instrument() const {
     return _instrument;
 }
 
-BasicOrder::BasicOrder(Setup setup, Instrument instrument, Origin origin)
+BasicOrder::BasicOrder(Instrument instrument, Setup setup, Origin origin)
     :_setup(setup),_instrument(instrument), _origin(origin)
 {
 
@@ -65,6 +65,27 @@ void BasicOrder::set_state(State st, Reason r, std::string message) {
     _message = std::move(message);
     _reason = r;
     _state = st;
+}
+
+ErrorOrder::ErrorOrder(Instrument instrument, Reason r, std::string message)
+    :AssociatedOrder(instrument)
+    ,_r(r)
+    ,_message(message) {}
+
+ErrorOrder::State ErrorOrder::get_state() const {
+    return State::discarded;
+}
+
+ErrorOrder::Reason ErrorOrder::get_reason() const {
+    return _r;
+}
+
+BasicOrder::Origin BasicOrder::get_origin() const {
+    return _origin;
+}
+
+std::string_view ErrorOrder::get_message() const {
+    return _message;
 }
 
 }

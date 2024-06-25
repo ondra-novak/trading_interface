@@ -54,6 +54,9 @@ public:
     virtual Account get_account() const = 0;
 
     virtual Config get_config() const = 0;
+
+    ///Retrieve internal instrument ID
+    virtual std::string get_id() const = 0;
 };
 
 
@@ -65,6 +68,7 @@ public:
     virtual IInstrument::Config get_config() const override {
         return {};
     }
+    virtual std::string get_id() const override {return {};}
     constexpr virtual ~NullInstrument() {}
 };
 
@@ -95,6 +99,16 @@ public:
             return hasher(ord._ptr);
         }
     };
+
+    ///Retrieve internal instrument ID
+    /**Instrument internal ID is used to record instrument refernece
+     * on the fill. You can use Instrument instance to retrieve fills
+     * on given instrument. However, you cannot convert ID to Instrument.
+     * @return
+     */
+    std::string get_id() const {
+        return _ptr->get_id();
+    }
 
 
 

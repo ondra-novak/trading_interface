@@ -8,6 +8,7 @@
 #include "../trading_ifc/order.h"
 #include "../trading_ifc/fill.h"
 #include "../trading_ifc/function.h"
+#include "basic_order.h"
 
 namespace trading_api {
 
@@ -17,8 +18,6 @@ class IEventTarget;
 
 using PEventTarget = std::shared_ptr<IEventTarget>;
 using WPEventTarget = std::weak_ptr<IEventTarget>;
-using OrderUpdateCB = Function<Order(),3*sizeof(void*)>;
-using OrderFillUpdateCB = Function<std::pair<Order,Fill>(),3*sizeof(void*)>;
 
 ///Represents strategy (with context) from service provider side
 /**
@@ -30,22 +29,25 @@ public:
 
     virtual ~IEventTarget () {}
     ///called when update of an instrument is finished
-    virtual void on_event(Instrument i) = 0;
+    virtual void on_event(const Instrument &i) = 0;
 
     ///called when update on an account is finished
-    virtual void on_event(Account a) = 0;
+    virtual void on_event(const Account &a) = 0;
 
     ///called when ticker is updated
-    virtual void on_event(Instrument i, const Ticker &tk) = 0;
+    virtual void on_event(const Instrument &i, const Ticker &tk) = 0;
 
     ///called when orderbook is updated
-    virtual void on_event(Instrument i, const OrderBook &ord) = 0;
+    virtual void on_event(const Instrument &i, const OrderBook &ord) = 0;
 
     ///called when order state changed
-    virtual void on_event(OrderUpdateCB fn) = 0;
+    virtual void on_event(const PBasicOrder &order, Order::State state) = 0;
+
+    ///called when order state changed
+    virtual void on_event(const PBasicOrder &order, Order::State state, Order::Reason reason, const std::string &message = {}) = 0;
 
     ///called when fill is detected
-    virtual void on_event(OrderFillUpdateCB fn) = 0;
+    virtual void on_event(const PBasicOrder &order, const Fill &fill) = 0;
 
 
 };

@@ -38,6 +38,8 @@ public:
     enum class Reason {
         ///no error reported
         no_reason,
+        ///order to replace not found, or already filled
+        not_found,
         ///discarded because position would be out of limit
         position_limit,
         ///discarded because max leverage would be reached
@@ -46,6 +48,8 @@ public:
         replace_unprocessed_fill,
         ///discarded because invalid params
         invalid_params,
+        ///discarded because order used in call is not compatible (dynamic cast failed)
+        incompatible_order,
         ///discarded because invalid usage of amend
         invalid_amend,
         ///discarded because unsuppored by service provider
@@ -57,7 +61,11 @@ public:
         ///error reported on exchange
         exchange_error,
         ///any other internal error
-        internal_error
+        internal_error,
+        ///trading is not possible, because low liquidity - (trading was stopped)
+        low_liquidity,
+        ///order rejected because exchange is overloaded
+        exchange_overload
     };
 
 
@@ -247,6 +255,9 @@ public:
     virtual SerializedOrder to_binary() const = 0;
 
     virtual Origin get_origin() const = 0;
+
+    ///Retrieve internal order id
+    virtual std::string get_id() const = 0;
 };
 
 template<typename T>
@@ -258,6 +269,11 @@ concept is_order = requires(T order) {
 template<typename T>
 concept order_has_amount = (is_order<T> && requires(T order) {
     {order.amount};
+});
+
+template<typename T>
+concept order_has_options= (is_order<T> && requires(T order) {
+    {order.options};
 });
 
 
@@ -272,6 +288,7 @@ public:
     virtual Instrument get_instrument() const override {return {};}
     virtual SerializedOrder to_binary() const override {return {};}
     virtual Origin get_origin() const override {return Origin::unknown;};
+    virtual std::string get_id() const override {return {};}
     virtual const Setup &get_setup() const override {
         static Setup empty;
         return empty;
@@ -299,6 +316,7 @@ public:
     using TpSl = IOrder::TpSl;
     using TrailingStop = IOrder::TrailingStop;
     using ClosePosition = IOrder::ClosePosition;
+    using ImmediateOrCancel = IOrder::ImmediateOrCancel;
     using Transfer = IOrder::Transfer;
     using Behavior = IOrder::Behavior;
     using Options = IOrder::Options;
@@ -331,16 +349,19 @@ public:
         return _ptr->get_filled();
     }
 
-
-    ///get total amount
-    double get_total() const {
+    static double get_total(const Setup &setup) {
         return std::visit([](const auto &x){
            if constexpr(order_has_amount<decltype(x)>) {
                return x.amount;
            } else {
                return 0;
            }
-        }, _ptr->get_setup());
+        }, setup);
+    }
+
+    ///get total amount
+    double get_total() const {
+        return get_total(_ptr->get_setup());
     }
 
     ///remain amount to fill
@@ -363,15 +384,30 @@ public:
         return _ptr->get_instrument();
     }
 
-    ///order's side
-    std::optional<Side> get_side() const {
+    static std::optional<Side> get_side(const Order::Setup &setup) {
         return std::visit([](const auto &x) ->std::optional<Side> {
             if constexpr(is_order<decltype(x)>) {
                 return x.side;
             } else {
                 return {};
             }
-        }, _ptr->get_setup());
+        }, setup);
+    }
+
+    static const Options *get_options(const Order::Setup &setup) {
+        return std::visit([](const auto &x) ->const Options * {
+            if constexpr(order_has_options<decltype(x)>) {
+                return &x.options;
+            } else {
+                return nullptr;
+            }
+        }, setup);
+
+    }
+
+    ///order's side
+    std::optional<Side> get_side() const {
+        return get_side(_ptr->get_setup());
     }
 
     ///returns true, if order is finished
@@ -422,6 +458,19 @@ public:
             return hasher(ord._ptr);
         }
     };
+
+    ///retrieve handle of order (shared pointer to interface)
+    auto get_handle() const {return _ptr;}
+
+
+    ///Retrieve order's internal ID
+    /**
+     * @return a string containing order's internal ID. This ID can
+     * be found on Fill as order_id. If you have Order instance, you
+     * can filter fills by orders. However there is no reverse way
+     * to retrieve Order from ID
+     */
+    std::string get_id() const {return _ptr->get_id();}
 
 protected:
     std::shared_ptr<const IOrder> _ptr;
