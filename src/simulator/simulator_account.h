@@ -3,6 +3,7 @@
 #include <mutex>
 #include "../trading_ifc/strategy_context.h"
 
+#include "simulator_instrument.h"
 
 namespace trading_api {
 
@@ -23,12 +24,20 @@ public:
     void record_fill(const Instrument &instrument, Side side, double price, double amount, Order::Behavior behaviour);
     bool close_position(const Instrument &instrument, PositionID pos, double price);
 
+    double calc_blocked() const;
+
     static constexpr PositionID overall_position = -1;
     static constexpr PositionID buy_position = -2;
     static constexpr PositionID sell_position = -3;
 
 protected:
 
+    struct InstrumentInfo {
+        std::weak_ptr<IInstrument> instrument;
+        PositionList list;
+        OverallPosition overall;
+        bool update_overall = true;
+    };
 
     mutable std::mutex _mx;
 
@@ -39,9 +48,11 @@ protected:
     double _fees = 0;
     PositionID _position_counter = 1;
 
-    std::unordered_map<Instrument, PositionList, Instrument::Hasher> _positions;
+    mutable std::unordered_map<const IInstrument *, InstrumentInfo> _positions;
     void realize_position(const Instrument::Config &icfg, const Position &pos, double price);
 
+    static OverallPosition calc_overall(const InstrumentInfo &ii);
+    static void update_overall(InstrumentInfo &ii) ;
 
 };
 

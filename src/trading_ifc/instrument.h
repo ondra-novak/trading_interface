@@ -38,8 +38,6 @@ public:
         double min_size = 0;
         ///minimal allowed volume (amount * multipler * price)
         double min_volume = 0;
-        ///max allowed leverage
-        double max_leverage = 0;
         ///fixed quantum factor between calculated pnl a real profit - (ex: 0.0001 USDT -> XBT = +10000 USDT profit = +1 XBT)
         double quantum_factor = 1;
         ///instrument is tradable (you can place orders)
@@ -57,6 +55,10 @@ public:
 
     ///Retrieve internal instrument ID
     virtual std::string get_id() const = 0;
+
+    virtual double calculate_pnl(const Account::Position &pos, double close_price, bool raw) = 0;
+
+    virtual double calculate_equity_allocation(double allocation) = 0;
 };
 
 
@@ -93,6 +95,25 @@ public:
 
     Config get_config() const {return _ptr->get_config();}
 
+    ///calculate profit and loss from position on given instrument
+    /**
+     * Final PNL can include lot size, lot multilier, contract type etc
+     *
+     * @param pos position
+     * @param close_price closing price or current price (if upnl is calculated)
+     * @param instrument_currency return value in instrument currency. This disables
+     * transformation from instrument currency to account currency
+     *
+     * @return
+     */
+    double calculate_pnl(const Account::Position &pos, double close_price, bool instrument_currency) const {
+        return _ptr->calculate_pnl(pos, close_price, raw);
+    };
+
+    double to_account_currency(double allocation) {
+        return _ptr->calculate_equity_allocation(allocation);
+    }
+
     struct Hasher {
         auto operator()(const Instrument &ord) const {
             std::hash<std::shared_ptr<const IInstrument> > hasher;
@@ -110,10 +131,13 @@ public:
         return _ptr->get_id();
     }
 
+    auto get_handle() const {return _ptr;}
+
 
 
 protected:
     std::shared_ptr<const IInstrument> _ptr;
+
 
 };
 
