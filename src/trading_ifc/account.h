@@ -45,6 +45,14 @@ public:
         double open_price = 0;  //open price (if 0 then unknown)
     };
 
+    struct OverallPosition: Position {
+        //unrealized fixed (locked) profit, calculated from hedge positions
+        //this value is zero, if there is no hedge position
+        double locked_in_pnl = 0;
+
+    };
+
+
     struct HedgePosition {
         Position buy = {};
         Position sell = {};     //note always emits negative position
@@ -64,7 +72,7 @@ public:
      *
      * @note short position has negative amount
      */
-    virtual Position get_position(const Instrument &instrument) const = 0;
+    virtual OverallPosition get_position(const Instrument &instrument) const = 0;
 
     ///Retrieves hedge position info
     /**
@@ -96,7 +104,7 @@ public:
 class NullAccount: public IAccount{
 public:
     virtual Info get_info() const override {return {};}
-    virtual Position get_position(const Instrument &)const  override {return {};}
+    virtual OverallPosition get_position(const Instrument &)const  override {return {};}
 
     virtual HedgePosition get_hedge_position(const Instrument &) const override {return {};}
     virtual PositionList get_all_positions(const Instrument &) const override {return {};}
