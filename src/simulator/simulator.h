@@ -6,8 +6,11 @@
 #include <map>
 #include <set>
 
+
 namespace trading_api {
 
+
+class SimulInstrument;
 
 class SimulatorBackend {
 public:
@@ -29,9 +32,6 @@ public:
     void update_orders(IEventTarget *target, std::span<SerializedOrder> orders);
     void subscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
     void unsubscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
-    Order place(IEventTarget *target, const Instrument &instrument, const Order::Setup &order_setup);
-    Order replace(IEventTarget *target, const Order &order, const Order::Setup &order_setup, bool amend);
-    void cancel(const Order &order);
     void update_ticker(IEventTarget *target, const Instrument &instrument);
     void update_account(IEventTarget *target, const Account &account);
     void update_instrument(IEventTarget *target, const Instrument &instrument);
@@ -90,6 +90,8 @@ protected:
 
     std::pair<double, double> ticker_info(const Instrument &instrument, Side side);
     void send_fill(const PBasicOrder &o, Side side,  double price, double size);
+
+    static const SimulInstrument *get_instrument(const Instrument &instrument);
 };
 
 

@@ -21,7 +21,7 @@ public:
 
     //backend
 
-    void record_fill(const Instrument &instrument, Side side, double price, double amount, Order::Behavior behaviour);
+    double record_fill(const Instrument &instrument, Side side, double price, double amount, Order::Behavior behaviour);
     bool close_position(const Instrument &instrument, PositionID pos, double price);
 
     double calc_blocked() const;

@@ -11,11 +11,11 @@ SimulAccount::SimulAccount(std::string label, std::string currency, double equit
 
 }
 
-void SimulAccount::record_fill(const Instrument &instrument, Side side, double price,
+double SimulAccount::record_fill(const Instrument &instrument, Side side, double price,
         double amount, Order::Behavior behaviour) {
 
     std::lock_guard _(_mx);
-    auto icfg = instrument.get_config();
+    const auto &icfg = instrument.get_config();
 
 
     InstrumentInfo &ii = _positions[instrument.get_handle().get()];
@@ -39,19 +39,28 @@ void SimulAccount::record_fill(const Instrument &instrument, Side side, double p
                 iter->id = _position_counter++;
                 iter->amount -= amount;
                 realize_position(icfg, p, price);
-                return;
+                return 0;
             }
         }
         if (behaviour == Order::Behavior::reduce) {
-            return;
+            return 0;
         }
     }
-    ii.list.push_back({
-        _position_counter++,
-        side,
-        amount,
-        price,
-    });
+    if (amount > 0) {
+        double blk = calc_blocked();
+        double lev = _leverage?_leverage:1.0;
+        blk += Instrument::calc_margin(icfg, price, amount, lev);
+        if (blk > _equity) {
+            return amount;
+        }
+        ii.list.push_back({
+            _position_counter++,
+            side,
+            amount,
+            price,
+        });
+    }
+    return 0;
 
 }
 
@@ -73,7 +82,7 @@ SimulAccount::OverallPosition SimulAccount::get_position(const Instrument &instr
 
 double SimulAccount::calc_blocked() const {
     double blocked = 0;
-    double maintenace_leverage = _leverage?_leverage/2:1;
+    double maintenace_leverage = _leverage?_leverage/2.0:1;
     for (auto &[k, v]: _positions) {
         if (v.update_overall) {
             update_overall(v);
@@ -85,10 +94,10 @@ double SimulAccount::calc_blocked() const {
         double last_price = siminstr->get_last_price();
         if (last_price <= 0) last_price = v.overall.open_price;
 
-        auto cfg = instrument->get_config();
+        const auto &cfg = instrument->get_config();
         blocked += v.overall.locked_in_pnl;
-        blocked += calc_pnl(cfg, v.overall, last_price);
-        blocked += v.overall.amount * v.overall.open_price / maintenace_leverage;
+        blocked += Instrument::calculate_pnl(cfg, v.overall, last_price);
+        blocked += Instrument::calc_margin(cfg, v.overall.amount,  v.overall.open_price , maintenace_leverage);
 
     }
     return blocked;
@@ -183,7 +192,7 @@ SimulAccount::Info SimulAccount::get_info() const {
 
 void SimulAccount::realize_position(const Instrument::Config &icfg, const Position &pos, double price) {
 
-    _equity += calc_pnl(icfg, pos, price);
+    _equity += Instrument::calculate_pnl(icfg, pos, price);
 
 }
 
@@ -193,7 +202,7 @@ bool SimulAccount::close_position(const Instrument &instrument, PositionID id, d
     if (ii.list.empty()) return false;
     ii.update_overall = true;
     if (id < 0) {
-        auto icfg = instrument.get_config();
+        const auto &icfg = instrument.get_config();
         Side close_side;
         switch (id) {
             case overall_position:
@@ -219,7 +228,7 @@ bool SimulAccount::close_position(const Instrument &instrument, PositionID id, d
             return pos.id == id;
         });
         if (iter != ii.list.end()) {
-            auto icfg = instrument.get_config();
+            const auto &icfg = instrument.get_config();
             realize_position(icfg, *iter, price);
             ii.list.erase(iter);
             return true;

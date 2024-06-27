@@ -1,5 +1,6 @@
 #include "simulator.h"
 
+#include "simulator_instrument.h"
 namespace trading_api{
 
 std::string SimulatorBackend::SimOrder::gen_id() {
@@ -214,16 +215,23 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
 SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
         const Instrument &instrument, const Order::ClosePosition &order,
         double ) {
-    Account acc = instrument.get_account();
-    Account::Position pos = acc.get_position_by_id(instrument, order.pos_id);
-    if (pos.side == Side::undefined) return {Order::State::rejected, Order::Reason::not_found};
-    //TODO:: update account - remove position
+    auto instr = get_instrument(instrument);
+    if (instr == nullptr) {
+        return {Order::State::rejected, Order::Reason::incompatible_order};
+    }
+    auto acc= instr->get_simul_account();
+    auto pos = acc->get_position_by_id(instrument, order.pos_id);
+    if (pos.id != order.pos_id) {
+        return {Order::State::rejected, Order::Reason::not_found};
+    }
     auto tinfo = ticker_info(instrument, reverse(pos.side));
     if (tinfo.second) {
+        acc->close_position(instrument, order.pos_id, tinfo.first);
         return {Order::State::filled, Order::Reason::no_reason, pos.amount, tinfo.first, pos.side};
     } else {
         return {Order::State::rejected, Order::Reason::low_liquidity};
     }
+
 }
 
 SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
@@ -236,6 +244,13 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
         else amount = order.amount;
         amount -= already_filled;
         if (amount > 0) {
+            auto instr = get_instrument(instrument);
+            if (instr == nullptr) {
+                return {Order::State::rejected, Order::Reason::incompatible_order};
+            }
+            auto acc= instr->get_simul_account();
+            acc->record_fill(instrument, order.side, tinfo.first, amount, order.options.behavior);
+
             //todo pdate account, add or remove position (hedge)
         }
         return {Order::State::filled, Order::Reason::no_reason, amount+already_filled, tinfo.first, order.side};
@@ -290,6 +305,11 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
         return {Order::State::pending, Order::Reason::no_reason, tinfo.first, amount, order.side};
     }
     return {Order::State::pending};
+}
+
+const SimulInstrument *SimulatorBackend::get_instrument(const Instrument &instrument) {
+    const IInstrument *ii = instrument.get_handle().get();
+    return dynamic_cast<const SimulInstrument *>(ii);
 }
 
 }
