@@ -226,8 +226,11 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
     }
     auto tinfo = ticker_info(instrument, reverse(pos.side));
     if (tinfo.second) {
-        acc->close_position(instrument, order.pos_id, tinfo.first);
-        return {Order::State::filled, Order::Reason::no_reason, pos.amount, tinfo.first, pos.side};
+        if (!acc->close_position(instrument, order.pos_id, tinfo.first)) {
+            return {Order::State::rejected, Order::Reason::not_found};
+        } else {
+            return {Order::State::filled, Order::Reason::no_reason, pos.amount, tinfo.first, pos.side};
+        }
     } else {
         return {Order::State::rejected, Order::Reason::low_liquidity};
     }
@@ -236,24 +239,26 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
 
 SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
         const Instrument &instrument, const Order::Market &order,
-        double already_filled) {
+        double filled) {
     auto tinfo = ticker_info(instrument, order.side);
     if (tinfo.second) {
-        double amount;
-        if (order.options.amount_is_volume) amount = order.amount/tinfo.first;
-        else amount = order.amount;
-        amount -= already_filled;
-        if (amount > 0) {
+        double amount = instrument.adjust_amount(tinfo.first, order.amount, order.options.amount_is_volume);
+        double remain = instrument.adjust_lot(amount - filled);
+        if (remain > 0) {
             auto instr = get_instrument(instrument);
             if (instr == nullptr) {
                 return {Order::State::rejected, Order::Reason::incompatible_order};
             }
             auto acc= instr->get_simul_account();
-            acc->record_fill(instrument, order.side, tinfo.first, amount, order.options.behavior);
-
-            //todo pdate account, add or remove position (hedge)
+            filled += acc->record_fill(instrument, order.side, tinfo.first, remain, order.options.behavior);
+            if (filled <= 0) {
+                return {Order::State::rejected, Order::Reason::no_funds};
+            }
         }
-        return {Order::State::filled, Order::Reason::no_reason, amount+already_filled, tinfo.first, order.side};
+        if (filled <= 0) {
+            return {Order::State::rejected, Order::Reason::too_small};
+        }
+        return {Order::State::filled, Order::Reason::no_reason, filled, tinfo.first, order.side};
     }
     return {Order::State::rejected, Order::Reason::low_liquidity};
 
@@ -262,18 +267,24 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
 
 SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
         const Instrument &instrument, const Order::ImmediateOrCancel &order,
-        double already_filled) {
+        double filled) {
     auto tinfo = ticker_info(instrument, order.side);
-    double amount;
-    if (order.options.amount_is_volume) amount = order.amount/tinfo.first;
-    else amount = order.amount;
-    amount -= already_filled;
+    double amount = instrument.adjust_amount(tinfo.first, order.amount, order.options.amount_is_volume);
+    double remain = instrument.adjust_lot(amount-filled);
     amount = std::max(amount, tinfo.second);
     if (amount > 0) {
-        //todo pdate account, add or remove position (hedge)
+        auto instr = get_instrument(instrument);
+        if (instr == nullptr) {
+            return {Order::State::rejected, Order::Reason::incompatible_order};
+        }
+        auto acc= instr->get_simul_account();
+        filled += acc->record_fill(instrument, order.side, tinfo.first, amount, order.options.behavior);
+        if (filled <= 0) {
+            return {Order::State::rejected, Order::Reason::no_funds};
+        }
     }
-    return {amount + already_filled >= order.amount?Order::State::filled:Order::State::canceled,
-                Order::Reason::no_reason, amount+already_filled, tinfo.first, order.side};
+    return {filled >= order.amount?Order::State::filled:Order::State::canceled,
+                Order::Reason::no_reason, filled, tinfo.first, order.side};
 
 }
 
@@ -290,21 +301,53 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
 
 SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
         const Instrument &instrument, const Order::Limit &order,
-        double already_filled) {
+        double filled) {
     auto tinfo = ticker_info(instrument, order.side);
 
-    double amount;
-    if (order.options.amount_is_volume) amount = order.amount/tinfo.first;
-    else amount = order.amount;
-    amount -= already_filled;
-    amount = std::max(amount, tinfo.second);
+    double amount = instrument.adjust_amount(tinfo.first, order.amount, order.options.amount_is_volume);
+    amount -= filled;
+    if (amount > 0) {
 
-    if ((order.side == Side::buy && order.limit_price > tinfo.first)
-            || (order.side == Side::sell && order.limit_price < tinfo.first)) {
-        //todo record execution
-        return {Order::State::pending, Order::Reason::no_reason, tinfo.first, amount, order.side};
+        double limamount = std::max(amount, tinfo.second);
+
+
+        if ((order.side == Side::buy && order.limit_price > tinfo.first)
+                || (order.side == Side::sell && order.limit_price < tinfo.first)) {
+
+            auto instr = get_instrument(instrument);
+            if (instr == nullptr) {
+                return {Order::State::rejected, Order::Reason::incompatible_order};
+            }
+            auto acc= instr->get_simul_account();
+            filled += acc->record_fill(instrument, order.side, tinfo.first, limamount, order.options.behavior);
+            if (filled <= 0) {
+                return {Order::State::rejected, Order::Reason::no_funds};
+            }
+            amount -= filled;
+
+            return {Order::State::pending, Order::Reason::no_reason, tinfo.first, amount, order.side};
+        }
+    }  if (filled <= 0) {
+        return {Order::State::rejected, Order::Reason::too_small};
     }
+
     return {Order::State::pending};
+}
+
+void SimulatorBackend::send_market_event(Timestamp tp,
+        const Instrument &instrument, const Ticker &ticker,
+        const Orderbook &orderbook) {
+
+    InstrumentState &st = instrument[instrument];
+
+
+}
+
+SimulatorBackend::InstrumentState &SimulatorBackend::get_state(const Instrument &instrument) {
+    auto iter = _instruments.find(instrument);
+    if (iter == _instruments.end()) {
+        _instruments.emplace(instrument, InstrumentState{});
+    }
 }
 
 const SimulInstrument *SimulatorBackend::get_instrument(const Instrument &instrument) {

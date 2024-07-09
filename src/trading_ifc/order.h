@@ -65,7 +65,10 @@ public:
         ///trading is not possible, because low liquidity - (trading was stopped)
         low_liquidity,
         ///order rejected because exchange is overloaded
-        exchange_overload
+        exchange_overload,
+        ///order amount is too small
+        too_small
+
     };
 
 

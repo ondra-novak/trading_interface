@@ -43,6 +43,10 @@ public:
 
     //backend
 
+
+    void send_market_event(Timestamp tp, const BaseSimuInstrument &instrument,
+                    const Ticker &ticker, const Orderbook &orderbook);
+
 protected:
     std::mutex _mx;
 
@@ -57,7 +61,7 @@ protected:
 
     struct InstrumentState {
         std::vector<PendingOrder> _active_orders;
-        std::optional<Ticker> _last_ticker;
+        Ticker _last_ticker;
         OrderBook _orderbook;
         std::vector<IEventTarget *> _subscriptions_ticker;
         std::vector<IEventTarget *> _subscriptions_orderbook;
@@ -66,6 +70,7 @@ protected:
     };
 
     std::unordered_map<Instrument, InstrumentState, Instrument::Hasher> _instruments;
+    std::unordered_map<const BaseSimuInstrument *, Instrument> _instrument_map;
 
     std::shared_ptr<SimOrder> create_sim_order(const Instrument &i, const Order::Setup &stp);
 
@@ -92,6 +97,9 @@ protected:
     void send_fill(const PBasicOrder &o, Side side,  double price, double size);
 
     static const SimulInstrument *get_instrument(const Instrument &instrument);
+
+    InstrumentState &get_state(const Instrument &instrument);
+
 };
 
 

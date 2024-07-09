@@ -36,7 +36,6 @@ protected:
         std::weak_ptr<IInstrument> instrument;
         PositionList list;
         OverallPosition overall;
-        bool update_overall = true;
     };
 
     mutable std::mutex _mx;

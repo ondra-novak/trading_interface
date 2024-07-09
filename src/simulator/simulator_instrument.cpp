@@ -4,16 +4,9 @@
 namespace trading_api {
 
 BaseSimuInstrument::BaseSimuInstrument(const Config &cfg, std::string id)
-        :_cfg(cfg), _id(id), _last_price(0) {}
+        :_cfg(cfg), _id(id) {}
 
 
-void BaseSimuInstrument::set_last_price(double last_price) {
-    _last_price = last_price;
-}
-
-double BaseSimuInstrument::get_last_price() const {
-    return _last_price;
-}
 
 const BaseSimuInstrument::Config& BaseSimuInstrument::get_config() const {
     return _cfg;
@@ -45,8 +38,20 @@ std::string SimulInstrument::get_label() const {
     return _label;
 }
 
-double SimulInstrument::get_last_price() const {
-    return _base_instrument->get_last_price();
+
+double SimulInstrument::get_current_price(Side side) const {
+    const Ticker &tk = _base_instrument->get_ticker();
+    switch (side) {
+        case Side::buy: return tk.bid;
+        case Side::sell: return tk.ask;
+        default: return tk.last;
+    }
+}
+
+double SimulInstrument::get_current_value(Side side) const {
+    const auto &cfg = _base_instrument->get_config();
+    return Instrument::quotation_to_price(cfg,get_current_price(side))
+            * Instrument::lot_to_amount(cfg, 1);
 }
 
 }

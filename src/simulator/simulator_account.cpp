@@ -17,15 +17,33 @@ double SimulAccount::record_fill(const Instrument &instrument, Side side, double
     std::lock_guard _(_mx);
     const auto &icfg = instrument.get_config();
 
-
+    //check
     InstrumentInfo &ii = _positions[instrument.get_handle().get()];
-    ii.update_overall = true;
+
+    double blk = calc_blocked();
+    double lev = _leverage?_leverage:1.0;
+    double filled = 0;
+
+    if (behaviour != Order::Behavior::reduce) {
+        if (ii.overall.side == side || behaviour == Order::Behavior::hedge) {
+            blk += Instrument::calc_margin(icfg, price, amount, _leverage);
+            if (blk > _equity) return 0;
+        } else {
+            double rm = amount - ii.overall.amount;
+            blk += Instrument::calc_margin(icfg, price, rm, lev);
+            if (blk > _equity) return 0;
+        }
+    }
+
+
+
     if (behaviour != Order::Behavior::hedge) {
         Side close_side = reverse(side);
         ii.list.erase(std::remove_if(ii.list.begin(), ii.list.end(), [&](const Position &pos){
             if (pos.side == close_side && pos.amount <= amount+pos.amount*1e-10) {
                 realize_position(icfg, pos, price);
                 amount -= pos.amount;
+                filled += pos.amount;
                 return true;
             }
             return false;
@@ -39,16 +57,18 @@ double SimulAccount::record_fill(const Instrument &instrument, Side side, double
                 iter->id = _position_counter++;
                 iter->amount -= amount;
                 realize_position(icfg, p, price);
-                return 0;
+                filled += p.amount;
+                update_overall(ii);
+                return filled;
             }
         }
         if (behaviour == Order::Behavior::reduce) {
-            return 0;
+            update_overall(ii);
+            return filled;
         }
     }
     if (amount > 0) {
         double blk = calc_blocked();
-        double lev = _leverage?_leverage:1.0;
         blk += Instrument::calc_margin(icfg, price, amount, lev);
         if (blk > _equity) {
             return amount;
@@ -59,8 +79,9 @@ double SimulAccount::record_fill(const Instrument &instrument, Side side, double
             amount,
             price,
         });
+        filled += amount;
     }
-    return 0;
+    return filled;
 
 }
 
@@ -75,7 +96,6 @@ SimulAccount::OverallPosition SimulAccount::get_position(const Instrument &instr
     std::lock_guard _(_mx);
     auto iter = _positions.find(instrument.get_handle().get());
     if (iter == _positions.end()) return {};
-    if (iter->second.update_overall) update_overall(iter->second);
     return iter->second.overall;
 
 }
@@ -84,9 +104,6 @@ double SimulAccount::calc_blocked() const {
     double blocked = 0;
     double maintenace_leverage = _leverage?_leverage/2.0:1;
     for (auto &[k, v]: _positions) {
-        if (v.update_overall) {
-            update_overall(v);
-        }
         auto instrument = v.instrument.lock();
         auto siminstr = dynamic_cast<const SimulInstrument *>(instrument.get());
         if (siminstr == nullptr) continue;
@@ -105,7 +122,6 @@ double SimulAccount::calc_blocked() const {
 
 void SimulAccount::update_overall(InstrumentInfo &ii)  {
     ii.overall = calc_overall(ii);
-    ii.update_overall = false;
 }
 
 SimulAccount::OverallPosition SimulAccount::calc_overall(const InstrumentInfo &ii) {
@@ -200,7 +216,6 @@ bool SimulAccount::close_position(const Instrument &instrument, PositionID id, d
     std::lock_guard _(_mx);
     InstrumentInfo &ii = _positions[instrument.get_handle().get()];
     if (ii.list.empty()) return false;
-    ii.update_overall = true;
     if (id < 0) {
         const auto &icfg = instrument.get_config();
         Side close_side;
@@ -210,6 +225,7 @@ bool SimulAccount::close_position(const Instrument &instrument, PositionID id, d
                     realize_position(icfg, pos, price);
                 }
                 ii.list.clear();
+                update_overall(ii);
                 return true;
             case buy_position: close_side = Side::buy;break;
             case sell_position: close_side = Side::sell;break;
@@ -222,6 +238,7 @@ bool SimulAccount::close_position(const Instrument &instrument, PositionID id, d
             ok = true;
             return true;
         }), ii.list.end());
+        update_overall(ii);
         return ok;
     } else {
         auto iter = std::find_if(ii.list.begin(), ii.list.end(), [&](const Position &pos){
@@ -231,6 +248,7 @@ bool SimulAccount::close_position(const Instrument &instrument, PositionID id, d
             const auto &icfg = instrument.get_config();
             realize_position(icfg, *iter, price);
             ii.list.erase(iter);
+            update_overall(ii);
             return true;
         } else {
             return false;

@@ -2,6 +2,7 @@
 
 #include "simulator_account.h"
 #include "../trading_ifc/strategy_context.h"
+#include "../trading_ifc/orderbook.h"
 
 
 namespace trading_api {
@@ -15,14 +16,36 @@ public:
 
     BaseSimuInstrument(const Config &cfg, std::string id);
 
-    void set_last_price(double last_price);
-    double get_last_price() const ;
     const Config &get_config() const;
     const std::string &get_id() const;
+
+    const OrderBook& get_orderbook() const {
+        return _orderbook;
+    }
+
+    void set_orderbook(const OrderBook &orderbook) {
+        _orderbook = orderbook;
+        _orderbook.update_ticker(_ticker);
+    }
+
+    void set_last_price(double price) {
+        _ticker.last = price;
+    }
+
+    const Ticker& get_ticker() const {
+        return _ticker;
+    }
+
+    void set_ticker(const Ticker &ticker) {
+        _ticker = ticker;
+        _orderbook.update_from_ticker(tk);
+    }
+
 protected:
     Config _cfg;
     std::string _id;
-    double _last_price;
+    Ticker _ticker;
+    OrderBook _orderbook;
 
 };
 
@@ -39,7 +62,18 @@ public:
     virtual std::string get_id() const override;
     virtual std::string get_label() const override;
 
-    double get_last_price() const ;
+    ///gets current quotation price
+    /**
+     * @param side specify buy for bid and sell for ask
+     * @return price
+     */
+    double get_current_price(Side side) const ;
+    ///gets current value of instrument for 1 share
+    /**
+     * @param side specify buy for bid and sell for ask
+     * @return price
+     */
+    double get_current_value(Side side) const ;
 
     SimulAccount *get_simul_account() const {
         return _account.get();

@@ -232,8 +232,11 @@ public:
      * @param amount amount in lots
      * @return adjusted amount in lots
      */
-    double adjust_amount(double amount) const {
-        return adjust_amount(get_config(), amount);
+    double adjust_lot(double amount) const {
+        return adjust_lot(get_config(), amount);
+    }
+    double adjust_lot_down(double amount) const {
+        return adjust_lot_down(get_config(), amount);
     }
     ///calculate minimal real amount for given price
     /**
@@ -244,6 +247,9 @@ public:
         return calc_min_amount(get_config(), price);
     }
 
+    double adjust_amount(double price, double size, bool size_is_volume) const {
+        return adjust_amount(get_config(), price, size, size_is_volume);
+    }
     static double lot_to_amount(const Config &cfg, double lots) {
         if (cfg.type == Type::inverted_contract) {
              lots = -lots;
@@ -286,8 +292,14 @@ public:
     static double adjust_price(const Instrument::Config &cfg, double price) {
         return std::max(std::round(price/cfg.tick_size)*cfg.tick_size, cfg.tick_size);
     }
-    static double adjust_amount(const Config &cfg, double amount)  {
+    static double adjust_lot(const Config &cfg, double amount)  {
         return std::round(amount/cfg.lot_size)*cfg.lot_size;
+    }
+    static double adjust_lot_down(const Config &cfg, double amount)  {
+        return std::floor(amount/cfg.lot_size)*cfg.lot_size;
+    }
+    static double adjust_lot_up(const Config &cfg, double amount)  {
+        return std::ceil(amount/cfg.lot_size)*cfg.lot_size;
     }
     static double calc_min_amount(const Config &cfg, double price) {
         double real_min_size = std::abs(lot_to_amount(cfg, cfg.min_size));
@@ -299,6 +311,18 @@ public:
         double real_amount = lot_to_amount(cfg, amount);
         double real_price = quotation_to_price(cfg, price);
         return real_amount * real_price / leverage;
+    }
+
+    static double adjust_amount(const Instrument::Config &cfg, double price, double size, bool size_is_volume) {
+        if (size_is_volume) {
+            double ms = calc_min_amount(cfg, price);
+            double lt = adjust_lot_down(cfg,amount_to_lot(cfg, size/quotation_to_price(cfg, price)));
+            if (ms > lot_to_amount(cfg, lt)) return 0;
+            return lt;
+        } else {
+            double ms = adjust_lot_up(cfg,amount_to_lot(cfg, calc_min_amount(cfg, price)));
+            return std::max(ms,adjust_lot(cfg, size));
+        }
     }
 
 
