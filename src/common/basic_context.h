@@ -49,7 +49,7 @@ public:
     virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) override;
     virtual Fills get_fills(const Instrument &i, std::size_t limit) const override ;
     virtual Fills get_fills(const Instrument &i, Timestamp tp) const override ;
-    virtual Order place(const Instrument &instrument, const Order::Setup &setup) override;
+    virtual Order place(const Instrument &instrument, const Account &account,  const Order::Setup &setup) override;
     virtual void cancel(const Order &order) override;
     virtual void set_timer(Timestamp at, CompletionCB fnptr, TimerID id) override;
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) override;
@@ -277,7 +277,14 @@ Fills BasicContext<S,E>::get_fills(const Instrument &i,Timestamp tp) const {
     return _storage.get_fills(i, tp);
 }
 template<StorageType S, ExchangeType E>
-Order BasicContext<S,E>::place(const Instrument &instrument, const Order::Setup &setup) {
+Order BasicContext<S,E>::place(const Instrument &instrument, const Account &account, const Order::Setup &setup) {
+    Exchange exch = instrument.get_exchange();
+    if (exch != account.get_exchange()) {
+        return Order(std::make_shared<ErrorOrder>(
+                instrument, account, IOrder::Reason::invalid_params
+                ));
+    }
+
     auto ord = _exchange.create_order(instrument, setup);
     if (ord->get_state() != Order::State::discarded) {
         _batch_place.push_back(ord);

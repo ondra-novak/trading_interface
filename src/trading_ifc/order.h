@@ -43,7 +43,8 @@ public:
         not_found,
         ///discarded because position would be out of limit
         position_limit,
-        ///discarded because max leverage would be reached
+        ///disc
+        /// arded because max leverage would be reached
         max_leverage,
         ///rejected during replace because there is unprocessed fill on way
         replace_unprocessed_fill,
@@ -264,6 +265,8 @@ public:
 
     ///Retrieve internal order id
     virtual std::string get_id() const = 0;
+
+    class Null;
 };
 
 template<typename T>
@@ -284,7 +287,7 @@ concept order_has_options= (is_order<T> && requires(T order) {
 
 
 
-class NullOrder: public IOrder {
+class IOrder::Null: public IOrder {
 public:
     virtual State get_state() const override {return State::undefined;}
     virtual double get_last_price() const override {return 0.0;}
@@ -300,17 +303,13 @@ public:
         static Setup empty;
         return empty;
     }
-    constexpr virtual ~NullOrder() override {}
 };
 
-class Order {
+class Order: public Wrapper<IOrder> {
 public:
-    static constexpr NullOrder null_order = {};
-    static std::shared_ptr<const IOrder> null_order_ptr;
 
+    using Wrapper<IOrder>::Wrapper;
 
-    Order():_ptr(null_order_ptr) {}
-    Order(std::shared_ptr<const IOrder> x): _ptr(std::move(x)) {}
 
     using State = IOrder::State;
     using Reason = IOrder::Reason;
@@ -328,13 +327,6 @@ public:
     using Behavior = IOrder::Behavior;
     using Options = IOrder::Options;
     using Origin = IOrder::Origin;
-
-    explicit operator bool() const {return _ptr != null_order_ptr;}
-    bool defined() const {return _ptr != null_order_ptr;}
-    bool operator!() const {return _ptr == null_order_ptr;}
-
-    bool operator==(const Order &other) const = default;
-    std::strong_ordering operator<=>(const Order &other) const = default;
 
     ///get order state
     State get_state() const {
@@ -471,9 +463,6 @@ public:
         }
     };
 
-    ///retrieve handle of order (shared pointer to interface)
-    auto get_handle() const {return _ptr;}
-
 
     ///Retrieve order's internal ID
     /**
@@ -484,13 +473,9 @@ public:
      */
     std::string get_id() const {return _ptr->get_id();}
 
-protected:
-    std::shared_ptr<const IOrder> _ptr;
 
 };
 
-
-inline std::shared_ptr<const IOrder> Order::null_order_ptr = {&Order::null_order, [](auto){}};
 
 }
 

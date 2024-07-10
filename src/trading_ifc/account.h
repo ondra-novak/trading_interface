@@ -87,10 +87,14 @@ public:
     virtual std::string get_label() const = 0;
 
     virtual Position get_position_by_id(const Instrument &instrument, PositionID id) const = 0;
+
+    virtual Exchange get_exchange() const = 0;
+
+    class Null;
 };
 
 
-class NullAccount: public IAccount{
+class IAccount::Null: public IAccount{
 public:
     virtual Info get_info() const override {return {};}
     virtual OverallPosition get_position(const Instrument &)const  override {return {};}
@@ -99,7 +103,7 @@ public:
     virtual PositionList get_all_positions(const Instrument &) const override {return {};}
     virtual Position get_position_by_id(const Instrument &, PositionID ) const override {return {};}
     virtual std::string get_label() const override {return {};}
-    constexpr virtual ~NullAccount() {}
+    virtual Exchange get_exchange() const override {return {};}
 };
 
 
@@ -111,21 +115,16 @@ public:
  * currency side. On futures account, this can be mapped to collateral
  * account type. One user account can have multiple such accounts.
  */
-class Account {
+class Account: public Wrapper<IAccount> {
 public:
 
-    static constexpr NullAccount null_account = {};
-    static std::shared_ptr<const IAccount> null_account_ptr;
+    using Wrapper<IAccount>::Wrapper;
 
     using Info = IAccount::Info;
     using HedgePosition = IAccount::HedgePosition;
     using PositionList = IAccount::PositionList;
 
-    Account():_ptr(null_account_ptr) {}
-    Account(std::shared_ptr<const IAccount> x): _ptr(std::move(x)) {}
 
-    bool operator==(const Account &other) const = default;
-    std::strong_ordering operator<=>(const Account &other) const = default;
     ///Retrieve account's label
     /** Account's label can be defined in config */
     std::string get_label() const {return _ptr->get_label();}
@@ -172,19 +171,12 @@ public:
         return _ptr->get_position_by_id(instrument, id);
     }
 
+    ///Retrieve exchange instance, where this account is managed
+    Exchange get_exchange() const {return _ptr->get_exchange();}
 
-    struct Hasher {
-        auto operator()(const Account &ord) const {
-            std::hash<std::shared_ptr<const IAccount> > hasher;
-            return hasher(ord._ptr);
-        }
-    };
 
-protected:
-    std::shared_ptr<const IAccount> _ptr;
 };
 
-inline std::shared_ptr<const IAccount> Account::null_account_ptr = {&Account::null_account, [](auto){}};
 
 
 }

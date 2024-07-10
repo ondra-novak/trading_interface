@@ -7,23 +7,25 @@
 
 namespace trading_api {
 
-class AssociatedOrder: public NullOrder {
+class AssociatedOrder: public IOrder::Null {
 public:
 
-    AssociatedOrder(Instrument instrument);
+    AssociatedOrder(Instrument instrument, Account account);
 
     virtual Instrument get_instrument() const override;
+    virtual Account get_account() const override;
     virtual State get_state() const override;
     virtual SerializedOrder to_binary() const override {return {};}
     virtual Origin get_origin() const override {return Origin::strategy;}
 
 protected:
     Instrument _instrument;
+    Account _account;
 };
 
 class ErrorOrder: public AssociatedOrder {
 public:
-    ErrorOrder(Instrument instrument, Reason r, std::string message);
+    ErrorOrder(Instrument instrument, Account account, Reason r, std::string message);
 
     virtual State get_state() const override;
     virtual Reason get_reason() const override;
@@ -38,7 +40,7 @@ class BasicOrder: public IOrder {
 public:
 
 
-    BasicOrder(Instrument instrument, Setup setup, Origin origin);
+    BasicOrder(Instrument instrument, Account account, Setup setup, Origin origin);
     virtual State get_state() const override;
     virtual double get_last_price() const override;
     virtual std::string_view get_message() const override;
@@ -58,6 +60,7 @@ public:
 protected:
     Setup _setup;
     Instrument _instrument;
+    Account _account;
     Origin _origin;
 
     double _filled = 0;

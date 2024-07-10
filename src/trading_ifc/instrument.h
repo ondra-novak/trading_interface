@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include "position.h"
+#include "exchange.h"
 
 namespace trading_api {
 
@@ -63,10 +64,17 @@ public:
     ///Retrieve instrument's label (user defined)
     virtual std::string get_label() const = 0;
 
+
+    virtual std::string get_category() const = 0;
+
+    virtual Exchange get_exchange() const = 0;
+
+
+    class Null;
 };
 
 
-class NullInstrument: public IInstrument {
+class IInstrument::Null: public IInstrument {
 public:
 
     static constexpr Config null_config = {};
@@ -76,35 +84,22 @@ public:
     }
     virtual std::string get_id() const override {return {};}
     virtual std::string get_label() const override {return {};}
+    virtual std::string get_category() const override {return {};}
+    virtual Exchange get_exchange() const override {return {};}
 
-    constexpr virtual ~NullInstrument() {}
+
 };
 
-class Instrument {
+class Instrument: public Wrapper<IInstrument> {
 public:
     using Config = IInstrument::Config;
     using Type = IInstrument::Type;
 
 
-
-    static constexpr NullInstrument null_instrument = {};
-    static std::shared_ptr<const IInstrument> null_instrument_ptr;
-
-    Instrument():_ptr(null_instrument_ptr) {}
-    Instrument(std::shared_ptr<const IInstrument> x): _ptr(std::move(x)) {}
-
-    bool operator==(const Instrument &other) const = default;
-    std::strong_ordering operator<=>(const Instrument &other) const = default;
+    using Wrapper<IInstrument>::Wrapper;
 
 
     const Config &get_config() const {return _ptr->get_config();}
-
-    struct Hasher {
-        auto operator()(const Instrument &ord) const {
-            std::hash<std::shared_ptr<const IInstrument> > hasher;
-            return hasher(ord._ptr);
-        }
-    };
 
     ///Retrieve internal instrument ID
     /**Instrument internal ID is used to record instrument refernece
@@ -128,9 +123,12 @@ public:
         return _ptr->get_label();
     }
 
+    ///Instrument category - human readable text (for UI - optional)
+    std::string get_category() const {return _ptr->get_category();}
 
-    auto get_handle() const {return _ptr;}
 
+    ///Retrieve exchange instance, where this instrument is managed
+    Exchange get_exchange() const {return _ptr->get_exchange();}
 
     ///converts lot to amount
     /**
@@ -317,13 +315,8 @@ public:
     }
 
 
-protected:
-    std::shared_ptr<const IInstrument> _ptr;
-
-
 };
 
-inline std::shared_ptr<const IInstrument> Instrument::null_instrument_ptr = {&Instrument::null_instrument, [](auto){}};
 
 
 ///calculate pnl by type of instrument

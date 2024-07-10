@@ -3,11 +3,8 @@
 
 namespace trading_api {
 
-AssociatedOrder::AssociatedOrder(Instrument instrument)
-        :_instrument(instrument)
-{
-
-}
+AssociatedOrder::AssociatedOrder(Instrument instrument, Account account)
+        :_instrument(instrument), _account(account)  {}
 
 AssociatedOrder::State AssociatedOrder::get_state() const {
     return State::associated;
@@ -17,12 +14,15 @@ AssociatedOrder::State AssociatedOrder::get_state() const {
 Instrument AssociatedOrder::get_instrument() const {
     return _instrument;
 }
-
-BasicOrder::BasicOrder(Instrument instrument, Setup setup, Origin origin)
-    :_setup(setup),_instrument(instrument), _origin(origin)
-{
-
+Account AssociatedOrder::get_account() const {
+    return _account;
 }
+
+BasicOrder::BasicOrder(Instrument instrument, Account account, Setup setup, Origin origin)
+    :_setup(std::move(setup))
+    ,_instrument(std::move(instrument))
+    ,_account(std::move(account))
+    , _origin(origin) {}
 
 BasicOrder::State BasicOrder::get_state() const {
     return _state;
@@ -67,8 +67,8 @@ void BasicOrder::set_state(State st, Reason r, std::string message) {
     _state = st;
 }
 
-ErrorOrder::ErrorOrder(Instrument instrument, Reason r, std::string message)
-    :AssociatedOrder(instrument)
+ErrorOrder::ErrorOrder(Instrument instrument, Account account, Reason r, std::string message)
+    :AssociatedOrder(instrument, account)
     ,_r(r)
     ,_message(message) {}
 
