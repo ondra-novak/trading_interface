@@ -29,12 +29,13 @@ public:
     BasicContext() = default;
     ~BasicContext();
 
+    using Configuration = IStrategy::Configuration;
+
     void init(std::unique_ptr<IStrategy> strategy,
-            IStrategy::InstrumentList instruments,
+            const Configuration &config,
             ContextScheduler *ctx_sch,
             Storage storage,
-            Exchange exchange,
-            Config config);
+            Exchange exchange);
 
 
     virtual void on_event(const Instrument &i) override;
@@ -50,7 +51,7 @@ public:
     virtual Fills get_fills(const Instrument &i, Timestamp tp) const override ;
     virtual Order place(const Instrument &instrument, const Order::Setup &setup) override;
     virtual void cancel(const Order &order) override;
-    virtual TimerID set_timer(Timestamp at, CompletionCB fnptr) override;
+    virtual void set_timer(Timestamp at, CompletionCB fnptr, TimerID id) override;
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) override;
     virtual Timestamp now() const override;
     virtual Order bind_order(const Instrument &instrument) override;
@@ -61,9 +62,54 @@ public:
 
 protected:
 
+    class LocalScheduler : public Scheduler{
+    public:
+
+        using Scheduler::Scheduler;
+
+
+        template<typename X>
+        struct Rec {
+            X _data;
+            Function<void(const Instrument &, const X &)> _fn;
+        };
+        using TickerEv = std::map<Instrument, Rec<Ticker> >;
+        using OrderBookEv = std::map<Instrument, Rec<OrderBook> >;
+
+        template<typename X, typename Fn>
+        void enqueue_update(const Instrument &i, const X &update, Fn &&fn) {
+            std::lock_guard _(_mx);
+            using Ev = std::map<Instrument, Rec<X> >;
+            auto &events = std::get<Ev>(_events);
+            auto iter = events.find(i);
+            if (iter == events.end()) {
+                auto ins = events.emplace(i, Rec<X>{update, std::forward<Fn>(fn)});
+                const Instrument &ilb = ins.first->first;
+                enqueue_lk([this, &ilb]{
+                    std::unique_lock lk(_mx);
+                    auto &events = std::get<Ev>(_events);
+                    auto iter = events.find(ilb);
+                    if (iter != events.end()) {
+                        Instrument i = iter->first;
+                        Rec<X> rc = std::move(iter->second);
+                        events.erase(iter);
+                        lk.unlock();
+                        rc._fn(i, rc._data);
+                    }
+                });
+            } else {
+                iter->second._data = update;
+                iter->second._fn = std::forward<Fn>(fn);
+            }
+        }
+
+    protected:
+        std::tuple<TickerEv, OrderBookEv> _events;
+    };
+
     std::mutex _mx;
     std::unique_ptr<IStrategy> _strategy;
-    Scheduler _sch;
+    LocalScheduler _sch;
     ContextScheduler *_global_scheduler = nullptr;
     ContextScheduler::Registration _reg;
     Storage _storage;
@@ -105,11 +151,10 @@ BasicContext<S,E>::~BasicContext() {
 
 template<StorageType S, ExchangeType E>
 void BasicContext<S,E>::init(std::unique_ptr<IStrategy> strategy,
-        IStrategy::InstrumentList instruments,
+        const Configuration &config,
         ContextScheduler *ctx_sch,
         S storage,
-        E exchange,
-        Config config) {
+        E exchange) {
     strategy = std::move(_strategy);
     _global_scheduler = ctx_sch;
     _reg.wakeup_fn = [this](Timestamp tp){
@@ -122,9 +167,7 @@ void BasicContext<S,E>::init(std::unique_ptr<IStrategy> strategy,
     };
     _storage = storage;
     _exchange = exchange;
-    _sch.enqueue([this, config = std::move(config), instruments = std::move(instruments)]{
-        _strategy->on_init(Context(this), config, instruments, _storage.get_variables());
-    });
+    _strategy->on_init(this, config);
     auto orders = _storage.get_open_orders();
     _exchange.update_orders(this, {orders.data(), orders.size()});
 }
@@ -164,7 +207,7 @@ void BasicContext<S,E>::on_event(const PBasicOrder &order, Order::State state, O
 
 template<StorageType S, ExchangeType E>
 void BasicContext<S,E>::on_event(const Instrument &i, const OrderBook &ord) {
-    _sch.enqueue_collapse(orderbook_id, [this, i, ord = OrderBook(ord)]{
+    _sch.enqueue_update(i, ord, [this](const Instrument &i, const OrderBook &ord) {
         _strategy->on_orderbook(i, ord);
     });
 }
@@ -198,7 +241,7 @@ void BasicContext<S,E>::on_event(const Instrument &i) {
 
 template<StorageType S, ExchangeType E>
 void BasicContext<S,E>::on_event(const Instrument &i, const Ticker &tk) {
-    _sch.enqueue_collapse(ticker_id, [this, i, tk = Ticker(tk)]{
+    _sch.enqueue_update(i, tk, [this](const Instrument &i, const Ticker &tk){
         _strategy->on_ticker(i, tk);
     });
 }
@@ -271,8 +314,11 @@ void BasicContext<S,E>::cancel(const Order &order) {
 }
 
 template<StorageType S, ExchangeType E>
-TimerID BasicContext<S,E>::set_timer(Timestamp at, CompletionCB fnptr) {
-    return _sch.enqueue_timed(at, std::move(fnptr));
+void BasicContext<S,E>::set_timer(Timestamp at, CompletionCB fnptr, TimerID id) {
+    if (!fnptr) fnptr = [this, id]{
+        _strategy->on_timer(id);
+    };
+    return _sch.enqueue(at, std::move(fnptr), id);
 }
 
 template<StorageType S, ExchangeType E>

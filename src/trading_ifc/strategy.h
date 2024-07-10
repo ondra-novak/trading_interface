@@ -16,6 +16,11 @@ class IStrategy {
 public:
 
     using InstrumentList = std::vector<Instrument>;
+    using AccountList = std::vector<Account>;
+
+    using SignalNR = unsigned int;
+
+    static constexpr unsigned int signal_configuration_changed  = 0;
 
 
     virtual ~IStrategy() = default;
@@ -23,21 +28,15 @@ public:
 
     virtual StrategyConfigSchema get_config_schema() const = 0;
 
+    struct Configuration {
+        AccountList accounts;
+        InstrumentList instruments;
+        StrategyConfig config;
+    };
+
 
     ///called on initialization
-    /**
-     * @param ctx context - access to market
-     * @param config - strategy configuration
-     * @param instruments - list of instruments available for trading
-     * @param variables - object which allows to access permanently stored variables
-     *
-     * You can get list of accounts by enumerating instruments. Each instrument
-     * has associated account.
-     */
-    virtual void on_init(Context ctx,
-            Config config,
-            InstrumentList instrument,
-            Variables variables) = 0;
+    virtual void on_init(const Context &ctx, const Configuration &config) = 0;
 
     ///called when ticker changes (market triggers)
     /**
@@ -62,6 +61,12 @@ public:
     ///called when fill is detected
     virtual void on_fill(Order ord, Fill fill) = 0;
 
+    ///called when external signal
+    /**
+     * @param signalnr - signal number. There is predefined one signalnr = 0, when configuration changed
+     */
+    virtual void on_signal(SignalNR signalnr) = 0;
+
 };
 
 
@@ -71,13 +76,13 @@ public:
         return {};
     }
 
-    virtual void on_init(Context ctx,Config config,
-            InstrumentList instrument,Variables variables) override = 0;
+    virtual void on_init(const Context &ctx, const Configuration &config) override = 0;
     virtual void on_orderbook(Instrument, OrderBook ) override {}
     virtual void on_timer(TimerID) override {};
     virtual void on_ticker(Instrument, Ticker ) override {}
     virtual void on_fill(Order, Fill) override {}
     virtual void on_order(Order) override {}
+    virtual void on_signal(SignalNR) override {}
 };
 
 

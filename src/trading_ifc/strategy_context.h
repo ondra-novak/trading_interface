@@ -13,8 +13,45 @@ namespace trading_api {
 
 using CompletionCB = Function<void()>;
 
+
 template<typename T>
-concept BinarySerializable = std::is_trivially_copy_constructible_v<T>;
+concept BinarySerializable = (
+            (std::is_trivially_copy_constructible_v<T> && std::is_standard_layout_v<T>)
+            || (std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>));
+
+
+template<BinarySerializable T>
+std::string_view serialize_binary(const T &data) {
+    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
+        return std::string_view(data);
+    } else {
+        return std::string_view(reinterpret_cast<const char *>(&data), sizeof(data));
+    }
+}
+
+template<BinarySerializable T>
+std::optional<T> deserialize_binary(std::string_view binary) {
+    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
+        return T(binary);
+    } else {
+        std::optional<T> ret;
+        if (binary.size() == sizeof(T)) {
+            ret.emplace(*reinterpret_cast<const T *>(binary.data()));
+        }
+        return ret;
+    }
+}
+
+template<BinarySerializable T>
+T deserialize_binary(std::string_view binary, const T &defval) {
+    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
+        return T(binary);
+    } else if (sizeof(T) != binary.size()) {
+        return defval;
+    } else {
+        return T(*reinterpret_cast<const T *>(binary.data()));
+    }
+}
 
 
 
@@ -35,18 +72,23 @@ public:
     ///request update instrument
     virtual void update_instrument(const Instrument &i, CompletionCB complete_ptr) = 0;
 
-    ///Retrieves current time
-    virtual Timestamp now() const = 0;
+    virtual std::vector<Account> get_accounts() const = 0;
 
+    virtual std::vector<Instrument> get_instruments() const = 0;
+
+    virtual StrategyConfig get_config() const = 0;
+
+    ///Retrieves current time
+    virtual Timestamp get_current_time() const = 0;
 
     ///Sets time, which calls function wrapped into runnable object. It is still bound to strategy
-    virtual TimerID set_timer(Timestamp at, CompletionCB fnptr = {}) = 0;
+    virtual void set_timer(Timestamp at, CompletionCB fnptr = {}, TimerID id = 0) = 0;
 
     ///Cancel timer
     virtual bool clear_timer(TimerID id) = 0;
 
     ///Place an order
-    virtual Order place(const Instrument &instrument, const Order::Setup &setup) = 0;
+    virtual Order place(const Instrument &instrument, const Account &account, const Order::Setup &setup) = 0;
 
     ///Creates and bind an order to an instrument
     /**
@@ -57,7 +99,7 @@ public:
      * @param instrument associated instrument
      * @return dummy order (can be replaced)
      */
-    virtual Order bind_order(const Instrument &instrument) = 0;
+    virtual Order bind_order(const Instrument &instrument, const Account &account) = 0;
 
     ///Cancel given order
     virtual void cancel(const Order &order) = 0;
@@ -89,6 +131,13 @@ public:
      */
     virtual void set_var(std::string_view var_name, std::string_view value) = 0;
 
+    virtual std::string get_var(std::string_view var_name) = 0;
+
+    virtual void enum_vars(std::string_view prefix, const Function<void(std::string_view, std::string_view)> &fn) = 0;
+
+    virtual void enum_vars(std::string_view start, std::string_view end,  const Function<void(std::string_view, std::string_view)> &fn) = 0;
+
+
     ///Deletes persistently stored variable
     /**
      * @param var_name name of variable.
@@ -112,23 +161,28 @@ public:
 class NullContext: public IContext {
 public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
-    virtual TimerID set_timer(Timestamp , CompletionCB ) override {throw_error();}
+    virtual std::vector<Account> get_accounts() const {throw_error();};
+    virtual std::vector<Instrument> get_instruments() const {throw_error();};
+    virtual StrategyConfig get_config() const {throw_error();};
+    virtual void set_timer(Timestamp , CompletionCB, TimerID ) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();}
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
     virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
     virtual Fills get_fills(const Instrument &, std::size_t ) const override{throw_error();}
     virtual Fills get_fills(const Instrument &, Timestamp )const  override{throw_error();}
-    virtual Timestamp now() const override{throw_error();}
+    virtual Timestamp get_current_time() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual void update_account(const Account &, CompletionCB) override{throw_error();}
-    virtual Order bind_order(const Instrument &)override{throw_error();}
-    virtual Order place(const Instrument &,
-            const Order::Setup &) override{throw_error();}
+    virtual Order bind_order(const Instrument &,  const Account &)override{throw_error();}
+    virtual Order place(const Instrument &, const Account &, const Order::Setup &) override{throw_error();}
     virtual void allocate(const Account &, double ) override {throw_error();}
     virtual void set_var(std::string_view , std::string_view ) override{throw_error();};
     virtual void unset_var(std::string_view ) override{throw_error();};
     virtual void subscribe(SubscriptionType , const Instrument &) override {throw_error();}
     virtual void unsubscribe(SubscriptionType , const Instrument &) override {throw_error();}
+    virtual std::string get_var(std::string_view ) override {throw_error();}
+    virtual void enum_vars(std::string_view , const Function<void(std::string_view, std::string_view)> &)  override {throw_error();}
+    virtual void enum_vars(std::string_view , std::string_view ,  const Function<void(std::string_view, std::string_view)> &)  override {throw_error();}
     constexpr virtual ~NullContext() {}
 
 };
@@ -142,9 +196,18 @@ public:
 
     ContextT(PtrType ptr):_ptr(std::move(ptr)) {}
 
+
+    std::vector<Account> get_accounts() const {return _ptr->get_accounts();}
+
+    std::vector<Instrument> get_instruments() const {return _ptr->get_instruments();}
+
+    virtual StrategyConfig get_config() const {return _ptr->get_config();}
+
+
+
     ///store value under a variable name in a persistent storage
     /**
-     * Key-Value database is involved.
+     * Key-Value database is expected.
      *
      * @param key a string key under which the value will be stored
      * @param value a string value to be stored
@@ -158,11 +221,54 @@ public:
         _ptr->set_var(key, value);
     }
 
+    ///store value under a variable name in a persistent storage
+    /**
+     * Key-Value database is expected.
+     *
+     * @param key a string key under which the value will be stored
+     * @param value any binary serializable value, which includes all basic types, enums, and classes
+     * with trivial copy constructors (must not contain pointer)
+     *
+     */
     template<BinarySerializable T>
     void store(std::string_view key, const T &value) {
-        std::string_view binstr(reinterpret_cast<const char *>(&value), sizeof(T));
-        _ptr->set_var(key, binstr);
+        _ptr->set_var(key,serialize_binary(value));
     }
+
+    std::string retrieve(std::string_view varname) {
+        return _ptr->retrieve(varname);
+    }
+    template<BinarySerializable T>
+    T retrieve(std::string_view key, const T &default_value) {
+        return deserialize_binary(_ptr->retrieve(key), default_value);
+    }
+
+    template<std::invocable<std::string_view, std::string_view> Fn>
+    void retrieve(std::string_view prefix, Fn &&fn) {
+        return _ptr->enum_vars(prefix, std::forward<Fn>(fn));
+    }
+
+    template<BinarySerializable T, std::invocable<std::string_view, T> Fn>
+    void retrieve(std::string_view prefix, Fn &&fn) {
+        return _ptr->enum_vars(prefix, [&](std::string_view a, std::string_view b){
+            auto opt = deserialize_binary<T>(b);
+            if (opt.has_value()) fn(a,*opt);
+        });
+    }
+    template<std::invocable<std::string_view, std::string_view> Fn>
+    void retrieve(std::string_view from, std::string_view to, Fn &&fn) {
+        return _ptr->enum_vars(from, to, std::forward<Fn>(fn));
+    }
+
+    template<BinarySerializable T, std::invocable<std::string_view, T> Fn>
+    void retrieve(std::string_view from, std::string_view to, Fn &&fn) {
+        return _ptr->enum_vars(from, to, [&](std::string_view a, std::string_view b){
+            auto opt = deserialize_binary<T>(b);
+            if (opt.has_value()) fn(a,*opt);
+        });
+    }
+
+
 
     ///request update account
     /**
@@ -222,55 +328,81 @@ public:
     ///Retrieves current time
     Timestamp now() const {return _ptr->now();}
     ///Sets timer, which triggers event, on strategy interface
-    TimerID set_timer(Timestamp at) {return _ptr->set_timer(at);}
+    /**
+     * @param at time point when timer is triggered
+     * @param id optional identifier. It can be 0, but you will unable to detect, which timer triggered.
+     * The ID also allows you to cancel timer. ID don't need to be unique
+     *
+     */
+    void set_timer(Timestamp at, TimerID id = 0) {return _ptr->set_timer(at, {}, id);}
 
+    ///Sets timer, which triggers event, on strategy interface
+    /**
+     * @param dur duration
+     * @param id optional identifier. It can be 0, but you will unable to detect, which timer triggered.
+     * The ID also allows you to cancel timer. ID don't need to be unique
+     */
     template<typename A, typename B>
-    TimerID set_timer(std::chrono::duration<A, B> dur) {
-        return _ptr->set_timer(now() + dur);
+    void set_timer(std::chrono::duration<A, B> dur, TimerID id = 0) {
+        return _ptr->set_timer(now() + dur, {}, id);
     }
 
+    ///Schedule a function call to given time
+    /**
+     * @param at time point
+     * @param fn function
+     * @param id identifier
+     *
+     * @note this timer doesn't trigger on_timer
+     */
     template<std::invocable<> Fn>
-    TimerID set_timer(Timestamp at, Fn &&fn) {
-        return _ptr->set_timer(at, make_runnable(std::forward<Fn>(fn)));
+    void set_timer(Timestamp at, Fn &&fn, TimerID id = 0) {
+        return _ptr->set_timer(at, make_runnable(std::forward<Fn>(fn)), id);
     }
 
+    ///Schedule a function call to given time
+    /**
+     * @param dur duration
+     * @param fn function
+     * @param id identifier
+     *
+     * @note this timer doesn't trigger on_timer
+     */
     template<typename A, typename B, std::invocable<> Fn>
-    TimerID set_timer(std::chrono::duration<A, B> dur, Fn &&fn) {
-        return _ptr->set_timer(now() + dur, make_runnable(std::forward<Fn>(fn)));
+    void set_timer(std::chrono::duration<A, B> dur, Fn &&fn, TimerID id = 0) {
+        return _ptr->set_timer(now() + dur, make_runnable(std::forward<Fn>(fn)), id);
     }
 
     ///sleep until timestamp reached - coroutines
     /**
      * You need to co_await result to sleep
-     * @param at timestamp to sleep
-     * @return awaiter to be co_await
-     * @exception canceled strategy is about shut down
-     * @note you cannot cancel this operation (no clear_timer)
+     * @param at time point
+     * @param id optional id
      */
-    completion_awaiter sleep_until(Timestamp &at) {
+    completion_awaiter sleep_until(Timestamp &at, TimerID id = 0) {
         return [&](auto fn) {
-            _ptr->set_timer(at, std::move(fn));
+            _ptr->set_timer(at, std::move(fn), id);
         };
     }
-    ///sleep for given duration - coroutines
+    ///sleep until timestamp reached - coroutines
     /**
      * You need to co_await result to sleep
      * @param dur duration
-     * @return awaiter to be co_await
-     * @exception canceled strategy is about shut down
-     * @note you cannot cancel this operation (no clear_timer)
+     * @param id optional id
      */
     template<typename A, typename B>
-    completion_awaiter sleep_for(std::chrono::duration<A, B> dur) {
+    completion_awaiter sleep_for(std::chrono::duration<A, B> dur, TimerID id = 0) {
         return [&](auto fn) {
-            _ptr->set_timer(now()+dur, std::move(fn));
+            _ptr->set_timer(now()+dur, std::move(fn), id);
         };
     }
 
     ///Cancel timer
     bool clear_timer(TimerID id) {return _ptr->clear_timer(id);}
     ///Place an order
-    Order place(const Instrument &instrument, const Order::Setup &setup) {return _ptr->place(instrument, setup);}
+    Order place(const Instrument &instrument, const Account &account, const Order::Setup &setup) {
+        return _ptr->place(instrument, account, setup);
+    }
     ///Creates an order, which is asociated with an instrument, but it is not placed
     /**
      * You can use replace() function to place the order with new setup. This
@@ -280,7 +412,7 @@ public:
      * @param instrument associated instrument
      * @return dummy order (can be replaced)
      */
-    Order bind_order(const Instrument &instrument) {return _ptr->bind_order(instrument);}
+    Order bind_order(const Instrument &instrument, const Account &account) {return _ptr->bind_order(instrument, account);}
     ///Cancel given order
     void cancel(const Order &order) {_ptr->cancel(order);}
 
@@ -393,79 +525,6 @@ public:
     Context():ContextT<IContext *>(const_cast<NullContext *>(&null_context)) {}
 
 };
-
-class Variables {
-public:
-
-    struct Value {
-        const std::optional<std::string_view> v = {};
-        operator std::string_view() const {
-            return v.has_value()?*v:std::string_view();}
-
-        template<BinarySerializable T>
-        operator T() const {
-            return v.has_value() && sizeof(T) == v->size()?
-                    *reinterpret_cast<const T *>(v->data()):T();
-        }
-
-        std::string_view operator()(std::string_view defval) const {
-            return v.has_value()?*v:defval;
-        }
-        template<BinarySerializable T>
-        std::string_view operator()(const T &defval) const {
-            return v.has_value() && sizeof(T) == v->size()?
-                    *reinterpret_cast<const T *>(v->data()):defval;
-        }
-
-        bool operator !() const {
-            return !v.has_value();
-        }
-
-        Value() = default;
-        Value(const std::string &v):v(v) {}
-        Value(const std::string_view &v):v(v) {}
-    };
-
-    Value operator[](std::string_view key) const {
-        auto iter = _variables.find(key);
-        if (iter == _variables.end()) return {};
-        else return Value(iter->second);
-    }
-
-    auto begin() const {
-        return _variables.begin();
-    }
-    auto end() const {
-        return _variables.end();
-    }
-
-    auto prefix(std::string_view pfx) {
-        if (pfx.empty()) return std::pair(begin(), end());
-        auto low = _variables.lower_bound(pfx);
-        std::string pfx_end = end_of_range(pfx);
-        auto high = pfx.empty()?end():_variables.upper_bound(pfx_end);
-        return std::pair(low,high);
-    }
-
-    const std::map<std::string, std::string, std::less<> > _variables;
-protected:
-    std::string end_of_range(std::string_view pfx) {
-        std::string out;
-        while (!pfx.empty()) {
-            unsigned char c = pfx.back();
-            constexpr unsigned char last_code = 0xFF;
-            pfx = pfx.substr(0, pfx.length()-1);
-            if (c != last_code) {
-                ++c;
-                out = pfx;
-                out.push_back(c);
-                break;
-            }
-        }
-        return out;
-    }
-};
-
 
 }
 

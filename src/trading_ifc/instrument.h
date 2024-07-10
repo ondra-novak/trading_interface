@@ -1,7 +1,7 @@
 #pragma once
 
-#include "account.h"
 #include <cmath>
+#include "position.h"
 
 namespace trading_api {
 
@@ -46,11 +46,8 @@ public:
         bool can_short = false;
     };
 
-    using Position = Account::Position;
 
     constexpr virtual ~IInstrument() = default;
-
-    virtual Account get_account() const = 0;
 
     ///retrieve instrument account
     /**
@@ -74,9 +71,6 @@ public:
 
     static constexpr Config null_config = {};
 
-    virtual Account get_account() const override {
-        return {};
-    }
     virtual const IInstrument::Config &get_config() const override {
         return null_config;
     }
@@ -90,7 +84,7 @@ class Instrument {
 public:
     using Config = IInstrument::Config;
     using Type = IInstrument::Type;
-    using Position = Account::Position;
+
 
 
     static constexpr NullInstrument null_instrument = {};
@@ -102,9 +96,6 @@ public:
     bool operator==(const Instrument &other) const = default;
     std::strong_ordering operator<=>(const Instrument &other) const = default;
 
-
-    ///Retrieve associated account - note the account state probably need to be updated
-    Account get_account() const {return _ptr->get_account();}
 
     const Config &get_config() const {return _ptr->get_config();}
 
@@ -305,7 +296,7 @@ public:
         double real_min_size = std::abs(lot_to_amount(cfg, cfg.min_size));
         double real_lot_size = std::abs(lot_to_amount(cfg, cfg.lot_size));
         double real_min_vol = std::abs(cfg.min_volume/ quotation_to_price(cfg, price));
-        return std::max({real_min_size, real_lot_size, real_min_vol});
+        return std::max(std::max(real_min_size, real_lot_size), real_min_vol);
     }
     static double calc_margin(const Config &cfg, double price, double amount, double leverage) {
         double real_amount = lot_to_amount(cfg, amount);
@@ -342,7 +333,7 @@ inline std::shared_ptr<const IInstrument> Instrument::null_instrument_ptr = {&In
  * @param close_price closing price
  * @return pnl in real money
  */
-inline double calculate_pnl(const Instrument::Config &cfg, const Account::Position &pos, double close_price) {
+inline double calculate_pnl(const Instrument::Config &cfg, const Position &pos, double close_price) {
     switch (cfg.type) {
         default: return pos.amount * static_cast<int>(pos.side) * cfg.lot_multiplier * (close_price - pos.open_price);
         case Instrument::Type::inverted_contract:

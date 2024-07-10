@@ -1,6 +1,7 @@
 #pragma once
 
 #include "instrument.h"
+#include "account.h"
 
 #include <memory>
 #include <variant>
@@ -193,7 +194,7 @@ public:
     ///Close position order (CFD)
     struct ClosePosition {
         PositionID pos_id;
-        ClosePosition(const Account::Position &pos):pos_id(pos.id) {}
+        ClosePosition(const Position &pos):pos_id(pos.id) {}
     };
 
     ///Transfer money from one account to other account
@@ -210,11 +211,10 @@ public:
      *  transitional execution is performed
      */
     struct Transfer {
-        Account source;
         Account target;
         double amount;
-        Transfer(const Account &source, const Account &target, double amount)
-            :source(source), target(target), amount(amount) {}
+        Transfer(const Account &target, double amount)
+            :target(target), amount(amount) {}
     };
 
     using Setup = std::variant<
@@ -250,6 +250,9 @@ public:
 
     ///retrieve associated instrument instance
     virtual Instrument get_instrument() const = 0;
+
+    ///retrieve associated account instance
+    virtual Account get_account() const = 0;
 
     ///retrieve order's initial setup
     virtual const Setup &get_setup() const = 0;
@@ -289,6 +292,7 @@ public:
     virtual double get_filled() const override {return 0.0;}
     virtual Reason get_reason() const override {return Reason::no_reason;}
     virtual Instrument get_instrument() const override {return {};}
+    virtual Account get_account() const override {return {};}
     virtual SerializedOrder to_binary() const override {return {};}
     virtual Origin get_origin() const override {return Origin::unknown;};
     virtual std::string get_id() const override {return {};}
@@ -385,6 +389,11 @@ public:
     ///associated instrument
     Instrument get_instrument() const {
         return _ptr->get_instrument();
+    }
+
+    ///associated instrument
+    Account get_account() const {
+        return _ptr->get_account();
     }
 
     static std::optional<Side> get_side(const Order::Setup &setup) {

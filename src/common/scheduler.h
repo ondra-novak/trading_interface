@@ -22,11 +22,13 @@ public:
     using EventSeverityID = int;
 
     ///enqueue event to queue
-    void enqueue(Runnable r);
-    ///enqueue collapsed event (replaces existing event)
-    void enqueue_collapse(EventSeverityID event, Runnable r);
+    void enqueue(Runnable &r);
+    ///enqueue event to queue
+    void enqueue(Runnable &&r) {enqueue(r);}
     ///enqueue timed event
-    TimerID enqueue_timed(Timestamp tp, Runnable r);
+    void enqueue(Timestamp tp, Runnable &r, TimerID id);
+
+    void enqueue(Timestamp tp, Runnable &&r, TimerID id) {enqueue(tp,r,id);}
     ///wake up scheduler and borrow current thread
     /**
      * @param cur_time current time
@@ -62,19 +64,8 @@ protected:
         };
     };
 
-    struct CollapsableEvent {
-        EventSeverityID event_id;
-        Runnable r;
-        struct ordering {
-            bool operator()(const CollapsableEvent &a, const CollapsableEvent &b) const;
-        };
-    };
-
     std::mutex _mx;
-    std::queue<Runnable> _queue;
-    PriorityQueue<CollapsableEvent, CollapsableEvent::ordering> _collapsable_queue;
     PriorityQueue<TimedEvent, TimedEvent::ordering> _timed_queue;
-    TimerID _id_counter = 0;
     Notify _ntf = [](Timestamp) {};
     Timestamp _next_notify = Timestamp::max();
 
@@ -89,7 +80,8 @@ protected:
     Timestamp wakeup_internal(std::unique_lock<std::mutex> &lk, Timestamp cur_time);
     Timestamp calc_next_notify() const;
 
-
+    void enqueue_lk(Runnable &r);
+    void enqueue_lk(Runnable &&r) {enqueue_lk(r);}
 };
 
 

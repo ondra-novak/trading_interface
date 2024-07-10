@@ -14,7 +14,7 @@ const IStrategyFactory *load_strategy_module(std::string module_pathname) {
         throw load_strategy_exception(module_pathname, dlerror());
     }
 
-    auto entryfn = (EntryPointFn)dlsym(handle, "__trading_api_entry_point");
+    auto entryfn = (EntryPointFn)dlsym(handle, "__trading_api_strategy_entry_point");
     if (!entryfn){
         throw load_strategy_exception(module_pathname, "Missing entry point");
     }

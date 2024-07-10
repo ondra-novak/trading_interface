@@ -7,7 +7,7 @@ public:
     virtual void on_ticker(Instrument i, Ticker tk) override;
     virtual void on_orderbook(Instrument i, OrderBook tk) override;
     virtual void on_timer(TimerID id) override;
-    virtual void on_init(Context ctx, Config config, InstrumentList instruments, Variables vars) override;
+    virtual void on_init(const Context &ctx, const Configuration &config) override;
     virtual void on_fill(Order ord, Fill fill) override;
     virtual void on_order(Order ord) override;
     virtual StrategyConfigSchema get_config_schema() const override;
@@ -22,7 +22,7 @@ void strategy_main(Module &m) {
 inline void Example::on_timer(TimerID id) {
 }
 
-inline void Example::on_init(Context ctx, Config config, InstrumentList instruments, Variables vars) {
+inline void Example::on_init(const Context &ctx, const Configuration &config) {
 }
 
 inline void Example::on_fill(Order ord, Fill fill) {

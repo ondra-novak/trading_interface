@@ -2,32 +2,17 @@
 
 namespace trading_api {
 
-void Scheduler::enqueue(Runnable r) {
+void Scheduler::enqueue(Runnable &r) {
     std::lock_guard _(_mx);
-    _queue.push(std::move(r));
-    notify();
+    enqueue_lk(r);
 
 }
 
-void Scheduler::enqueue_collapse(EventSeverityID event_id, Runnable r) {
-    std::lock_guard _(_mx);
-    auto iter = std::find_if(_collapsable_queue.begin(), _collapsable_queue.end(),
-            [&](const CollapsableEvent &ev){return ev.event_id == event_id;});
-    if (iter != _collapsable_queue.end()) {
-        iter->r = std::move(r);
-    } else {
-        _collapsable_queue.push({event_id, std::move(r)});
-        notify();
-    }
 
-}
-
-Scheduler::TimerID Scheduler::enqueue_timed(Timestamp tp, Runnable r) {
+void Scheduler::enqueue(Timestamp tp, Runnable &r, TimerID id) {
     std::lock_guard _(_mx);
-    TimerID id = ++_id_counter;
     _timed_queue.push({tp, id, std::move(r)});
     notify();
-    return id;
 }
 
 
@@ -45,12 +30,8 @@ bool Scheduler::TimedEvent::ordering::operator()(const TimedEvent &a, const Time
 }
 
 Scheduler::Timestamp Scheduler::calc_next_notify() const {
-    if (_queue.empty() && _collapsable_queue.empty()) {
-        if (_timed_queue.empty()) return Timestamp::max();
-        else return _timed_queue.front().tp;
-    } else {
-        return Timestamp::min();
-    }
+    if (_timed_queue.empty()) return Timestamp::max();
+    else return _timed_queue.front().tp;
 }
 
 void Scheduler::notify() {
@@ -62,18 +43,7 @@ void Scheduler::notify() {
 }
 
 Scheduler::Timestamp Scheduler::wakeup_internal(std::unique_lock<std::mutex> &lk, Timestamp cur_time) {
-    if (!_queue.empty()) {
-        Runnable r = std::move(_queue.front());
-        lk.unlock();
-        r();
-        lk.lock();
-    } else if (_collapsable_queue.empty()) {
-        Runnable r = std::move(_collapsable_queue.front().r);
-        _collapsable_queue.pop();
-        lk.unlock();
-        r();
-        lk.lock();
-    } else if (!_timed_queue.empty() && _timed_queue.front().tp <= cur_time) {
+    if (!_timed_queue.empty() && _timed_queue.front().tp <= cur_time) {
         Runnable r = std::move(_timed_queue.front().r);
         _timed_queue.pop();
         lk.unlock();
@@ -84,10 +54,6 @@ Scheduler::Timestamp Scheduler::wakeup_internal(std::unique_lock<std::mutex> &lk
     return _next_notify;
 }
 
-bool Scheduler::CollapsableEvent::ordering::operator()(
-        const CollapsableEvent &a, const CollapsableEvent &b) const {
-    return a.event_id < b.event_id;
-}
 
 void Scheduler::run(std::condition_variable &cond, std::stop_token stop) {
     std::stop_callback __(stop, [&]{
@@ -110,6 +76,12 @@ void Scheduler::run(std::condition_variable &cond, std::stop_token stop) {
     wakeup_internal(lk, std::chrono::system_clock::now(), [](auto){}); //disarm wakeup
 }
 
+
+void Scheduler::enqueue_lk(Runnable &r) {
+    _timed_queue.push({Timestamp::min(), 0, std::move(r)});
+    notify();
+
+}
 
 
 

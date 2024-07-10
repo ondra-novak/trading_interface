@@ -38,7 +38,7 @@ public:
 
     void set_ticker(const Ticker &ticker) {
         _ticker = ticker;
-        _orderbook.update_from_ticker(tk);
+        _orderbook.update_from_ticker(ticker);
     }
 
 protected:

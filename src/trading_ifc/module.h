@@ -36,7 +36,7 @@ void strategy_main(trading_api::Module &m) ;
 
 
 extern "C" {
-const trading_api::IStrategyFactory * __trading_api_entry_point() {
+const trading_api::IStrategyFactory * __trading_api_strategy_entry_point() {
     static trading_api::Module module;
     strategy_main(module);
     return &module;
