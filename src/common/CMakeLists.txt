@@ -8,6 +8,7 @@ add_library (trading_api_common
     scheduler.cpp
     basic_order.cpp
     basic_context.cpp
+    basic_exchange.cpp
     )
 
 add_dependencies(trading_api_common libjson20_single_header)

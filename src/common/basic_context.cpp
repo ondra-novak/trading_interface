@@ -4,6 +4,6 @@
 namespace trading_api {
 
 
-template class BasicContext<MemoryStorage, ExchangePrototype>;
+template class BasicContext<MemoryStorage>;
 
 }

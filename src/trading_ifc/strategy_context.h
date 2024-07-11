@@ -56,10 +56,6 @@ T deserialize_binary(std::string_view binary, const T &defval) {
 
 
 
-enum class SubscriptionType {
-    ticker,
-    orderbook,
-};
 
 class IContext {
 public:

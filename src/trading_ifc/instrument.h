@@ -7,6 +7,12 @@
 namespace trading_api {
 
 
+enum class SubscriptionType {
+    ticker,
+    orderbook,
+};
+
+
 
 class IInstrument {
 public:

@@ -26,15 +26,22 @@ public:
         discarded,
         ///rejected by exchange
         rejected,
-        ///order is being sent to the exchange
+        ///order is being sent to the exchange (state is not yet known)
         sent,
-        ///order is pending (on exchange)
-        pending,
+        ///order is waiting to be triggered (stop order)
+        waiting,
+        ///order is active (in orderbook)
+        active,
         ///order has been canceled
         canceled,
         ///order has been filled
         filled
     };
+
+
+    static bool is_done(State st) {
+        return st != State::sent && st != State::active && st != State::waiting;
+    }
 
     enum class Reason {
         ///no error reported
@@ -415,13 +422,11 @@ public:
     }
 
     ///returns true, if order is finished
-    bool done() const {return get_state()!= Order::State::pending;}
+    bool done() const {return IOrder::is_done(get_state());}
     ///returns true, if order is discard
     bool discarded() const {return get_state() == Order::State::discarded;}
     ///returns true, if order is rejected
     bool rejected() const {return get_state() == Order::State::rejected;}
-    ///returns true, if order is pending
-    bool pending() const {return get_state() == Order::State::pending;}
     ///returns true, if order is canceled
     bool canceled() const {return get_state() == Order::State::canceled;}
 

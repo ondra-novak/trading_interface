@@ -13,6 +13,7 @@
 namespace trading_api {
 
 
+
 class IEventTarget;
 
 
@@ -34,11 +35,8 @@ public:
     ///called when update on an account is finished
     virtual void on_event(const Account &a) = 0;
 
-    ///called when ticker is updated
-    virtual void on_event(const Instrument &i, const Ticker &tk) = 0;
-
-    ///called when orderbook is updated
-    virtual void on_event(const Instrument &i, const OrderBook &ord) = 0;
+    ///called when subscription update
+    virtual void on_event(const Instrument &i, SubscriptionType subscription_type) = 0;
 
     ///called when order state changed
     virtual void on_event(const PBasicOrder &order, Order::State state) = 0;

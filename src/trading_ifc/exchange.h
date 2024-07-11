@@ -12,6 +12,7 @@ namespace trading_api {
 
 class Instrument;
 
+
 class IExchange {
 public:
 
