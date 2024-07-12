@@ -76,7 +76,8 @@ protected:
     Scheduler _scheduler;
     Storage _storage;
     std::unique_ptr<IStrategy> _strategy;
-    Timestamp _event_time;
+    Timestamp _event_time = Timestamp::min();
+    Timestamp _scheduled_time = Timestamp::max();
 
     struct EvUpdateInstrument {
         Instrument i;
@@ -192,7 +193,6 @@ protected:
             lk.lock();
             _queue.pop_front();
         }
-        Timestamp nx = Timestamp::max();
         while (!_timed_queue.empty() && _timed_queue.front().tp <= tp) {
                 Function<void()> fn (std::move(_timed_queue.front().r));
                 _timed_queue.pop();
@@ -201,8 +201,10 @@ protected:
                 lk.lock();
         }
         if (!_timed_queue.empty()) {
-            nx = _timed_queue.front().tp;
-            _scheduler(nx, [this](auto tp){on_scheduler(tp);}, this);
+            _scheduled_time = _timed_queue.front().tp;
+            _scheduler(_scheduled_time, [this](auto tp){on_scheduler(tp);}, this);
+        } else {
+            _scheduled_time = Timestamp::max();
         }
         flush_batches();
     }
@@ -305,7 +307,11 @@ void BasicContext<Storage, Scheduler>::notify_queue() {
     } else {
         tp = Timestamp::min();
     }
-    _scheduler(tp,[this](auto tp){on_scheduler(tp);}, this);
+    if (_scheduled_time > tp) {
+        _scheduled_time = tp;
+        _scheduler(tp,[this](auto tp){on_scheduler(tp);}, this);
+    }
+
 }
 
 template<StorageType Storage, SchedulerType Scheduler>
@@ -361,10 +367,8 @@ void BasicContext<Storage, Scheduler>::set_timer(Timestamp at, CompletionCB fnpt
     if (!fnptr) fnptr = [this, id]{
         _strategy->on_timer(id);
     };
-    Timestamp top = Timestamp::max();
-    if (!_timed_queue.empty()) top = _timed_queue.front().tp;
     _timed_queue.push(TimerItem{at, id, std::move(fnptr)});
-    if (at < top) notify_queue();
+    notify_queue();
 }
 
 template<StorageType Storage, SchedulerType Scheduler>
@@ -398,7 +402,7 @@ void BasicContext<Storage, Scheduler>::update_account(const Account &a, Completi
 }
 
 template<StorageType Storage, SchedulerType Scheduler>
-void BasicContext<Storage, Scheduler>::allocate(const Account &a, double equity) {
+void BasicContext<Storage, Scheduler>::allocate(const Account &, double ) {
     //todo
 }
 

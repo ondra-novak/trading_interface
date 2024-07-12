@@ -157,9 +157,9 @@ public:
 class NullContext: public IContext {
 public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
-    virtual std::vector<Account> get_accounts() const {throw_error();};
-    virtual std::vector<Instrument> get_instruments() const {throw_error();};
-    virtual StrategyConfig get_config() const {throw_error();};
+    virtual std::vector<Account> get_accounts() const  override {throw_error();};
+    virtual std::vector<Instrument> get_instruments() const override {throw_error();};
+    virtual StrategyConfig get_config() const override {throw_error();};
     virtual void set_timer(Timestamp , CompletionCB, TimerID ) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();}
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}

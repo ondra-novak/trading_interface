@@ -6,6 +6,9 @@ class Example: public AbstractStrategy {
 public:
     virtual void on_init(const Context &ctx, const Configuration &config) override;
     virtual StrategyConfigSchema get_config_schema() const override;
+protected:
+    Context _context;
+    Configuration _config;
 };
 
 
@@ -16,6 +19,9 @@ void strategy_main(Module &m) {
 
 
 inline void Example::on_init(const Context &ctx, const Configuration &config) {
+    _context = ctx;
+    _config = config;
+
 }
 
 

@@ -46,6 +46,8 @@ public:
 class StrategyConfig {
 public:
 
+    StrategyConfig() = default;
+
     StrategyConfig(const std::vector<std::pair<std::string, Value> > &values) {
         for (const auto &[k,v]: values) {
             _values[k] = &v;
