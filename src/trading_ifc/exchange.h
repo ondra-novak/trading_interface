@@ -11,6 +11,8 @@
 namespace trading_api {
 
 class Instrument;
+struct Ticker;
+class OrderBook;
 
 
 class IExchange {
@@ -29,18 +31,20 @@ public:
     virtual std::string get_label() const = 0;
     virtual std::string get_name() const = 0;
     virtual std::optional<Icon> get_icon() const = 0;
-    virtual void list_instruments(Function<void(const Instrument &)> fn) const = 0;
+    virtual bool get_last_ticker(const Instrument &instrument, Ticker &tk) const = 0;
+    virtual bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb) const = 0;
     class Null;
 };
 
 
 class IExchange::Null: public IExchange {
 public:
-    virtual void list_instruments(Function<void(const Instrument &)> ) const override {}
     virtual std::string get_label() const override {return {};}
     virtual std::string get_name() const override  {return {};}
     virtual std::string get_id() const override  {return {};}
     virtual std::optional<Icon> get_icon() const override {return {};}
+    virtual bool get_last_ticker(const Instrument &, Ticker &) const override {return false;}
+    virtual bool get_last_orderbook(const Instrument &, OrderBook &) const override {return false;}
 };
 
 
@@ -61,24 +65,6 @@ public:
 
     using Wrapper<IExchange>::Wrapper;
 
-    ///List of public instruments
-    /**
-     * Enumerate list of public instruments available for trading or data
-     * on the exchange.
-     *
-     * @param cb callback function, which retreieves instruments by one by
-     *
-     * @note you can probably subscribe for data
-     * @note this feature is optional, exchange don't need to return any instrument
-     * @note it is also possible, that exchange will not return instrument which
-     * is configured for the strategy. The strategy should trade only configured
-     * instruments,
-     *
-     */
-    template<std::invocable<const Instrument &> Fn>
-    void list_instruments(Fn &&cb) {
-        _ptr->list_instruments(std::forward<Fn>(cb));
-    }
 
     ///Retrieve user defined label (configured for this exchange)
     std::string get_label() const {return _ptr->get_label();}
@@ -88,6 +74,35 @@ public:
     std::string get_id() const  {return _ptr->get_id();}
     ///Retrieves icon. This feature is optional.
     std::optional<Icon> get_icon() const {return _ptr->get_icon();}
+
+    ///Retrieve last ticker synchronously
+    /**
+     * @param instrument instrument object
+     * @param tk variable which receives ticker
+     * @retval true received
+     * @retval false there is no last ticker stored
+     *
+     * @note this function is intended for internal use. You need to use
+     * context to subscribe instrument's data stream
+     *
+     */
+
+    bool get_last_ticker(const Instrument &instrument, Ticker &tk) {
+        return _ptr->get_last_ticker(instrument, tk);
+    }
+
+    ///Retrieve last orderbook state synchronously
+    /**
+     * @param instrument instrument object
+     * @param ordb variable which receives orderbook
+     * @retval true received
+     * @retval false cannot be retrieved synchronously
+     * @note this function is intended for internal use. You need to use
+     * context to subscribe instrument's data stream
+     */
+    bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb) {
+        return _ptr->get_last_orderbook(instrument, ordb);
+    }
 };
 
 

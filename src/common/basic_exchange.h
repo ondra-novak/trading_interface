@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../trading_ifc/strategy_context.h".h"
+#include "../trading_ifc/strategy_context.h"
+#include "../trading_ifc/exchange_service.h"
 
 #include "event_target.h"
 #include <map>
@@ -8,62 +9,68 @@
 
 namespace trading_api {
 
-class AbstractExchange {
+class BasicExchangeContext: public IExchangeContext {
 public:
 
 
+    void init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration);
 
-    virtual void list_instruments(Function<void(const Instrument&)> ) const {}
-    virtual std::string get_name() const  {return {};}
-    virtual std::string get_id() const {return {};}
 
     ///Disconnect given event target
     /**
      * Causes that any objects associated with this event target are disposed.
      * This includes open orders, subscriptions, pending updates, etc
      * @param target target to disconnect
+     *
+     * @b implementation: target must be removed from all subscriptions and
+     * asynchronous operations
      */
-    virtual void disconnect(const IEventTarget *target);
+    void disconnect(const IEventTarget *target);
+
     ///Request to update orders from exchange
     /**
      * Function is used to update state of orders stored in database
      *
-     * @param target target which will consume update events
+     * @param target target which will consume update events. Impementation
+     * must pass this pointer to order_restore()
      * @param orders list of orders to update. The orders are passed in binary
-     * serialized form (because they are probably read from the database). The
+     * serialized form (because they are read from the database). The
      * exchange instance must use binary form to restore instances of Order class.
      * Then all these orders are passed as on_order event. If there are unprocessed
      * fills, the exachange must also generate on_fill()
      *
-     * @note it is not necessery to track processed and unprocessed fills. The
-     * function can send all fills to the target. The target is responsible to
-     * discard any duplicated fills. This requires that generated fills have
-     * same unique identifier.
-     *
+     * @b implementation: the service provider must know, which order can restore.
+     * The binary representation must contain identification of the exchange. So
+     * the service provider can restore orders which are known for the exchange.
+     * other orders are order_restore(), then order_fill for every fill on the order,
+     * and finally order_state_change with final order state.
      */
-    virtual void restore_orders(IEventTarget *target, std::span<SerializedOrder> orders) = 0;
+    void restore_orders(IEventTarget *target, std::span<SerializedOrder> orders);
     ///Request to subscribe market data (stream)
     /**
      * @param target object which consumes updates
      * @param sbstype type of subscription
      * @param instrument instrument which is subscribed
      */
-    virtual void subscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
+    void subscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
     ///Unsubscribe stream
     /**
      * @param target object which consumes updates
      * @param sbstype type of subscription
      * @param instrument instrument
      */
-    virtual void unsubscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
+    void unsubscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument);
 
     ///Create order instance - don't place order yet
     /**
      * @param instrument associated instrument
      * @param setup order setup
      * @return pointer to newly created order. In case of error, discarded order must be created
+     *
+     * @b implementation: The function must create own instance of the order. Default implementation
+     * creates BasicOrder instance. It must not place the order
      */
-    virtual PBasicOrder create_order(const Instrument &instrument, const Order::Setup &setup) = 0;
+    Order create_order(const Instrument &instrument, const Account &account, const Order::Setup &setup);
 
     ///Create order instance which replaces other order - don't place order yet
     /**
@@ -71,21 +78,24 @@ public:
      * @param setup order setup
      * @param amend try to amend order
      * @return pointer to newly created order. In case of error, discarded order must be created
+     *
+     * @b implementation: The function must create own instance of the order. Default implementation
+     * creates BasicOrder instance. It must not place the order
      */
-    virtual PBasicOrder create_order_replace(const PCBasicOrder &replace, const Order::Setup &setup, bool amend) = 0;
+    Order create_order_replace(const Order &replace, const Order::Setup &setup, bool amend);
 
     ///Place orders in batch
     /**
      * @param target event target where these orders belongs
      * @param orders orders - must be created by create_order
      */
-    virtual void batch_place(IEventTarget *target, std::span<PBasicOrder> orders);
+    void batch_place(IEventTarget *target, std::span<Order> orders);
 
     ///Cancel orders in batch
     /**
      * @param orders list of orders to cancel
      */
-    virtual void batch_cancel(std::span<PCBasicOrder> orders) = 0;
+    void batch_cancel(std::span<Order> orders);
     ///Request update of ticker
     /**
      * You can request update of a current ticker in case that your strategy doesn't
@@ -101,7 +111,7 @@ public:
      * @param target
      * @param instrument
      */
-    virtual void update_ticker(IEventTarget *target, const Instrument &instrument);
+    void update_ticker(IEventTarget *target, const Instrument &instrument);
     ///Request to update account
     /**
      * The account don't need to be tracked realtime. The strategy needs to
@@ -117,7 +127,7 @@ public:
      * @param target
      * @param account
      */
-    virtual void update_account(IEventTarget *target, const Account &account) = 0;
+    void update_account(IEventTarget *target, const Account &account);
     ///Request to update instrument
     /**
      * Updates instrument information.
@@ -125,18 +135,73 @@ public:
      * @param target
      * @param instrument
      */
-    virtual void update_instrument(IEventTarget *target, const Instrument &instrument) = 0;
+    void update_instrument(IEventTarget *target, const Instrument &instrument);
+
+    ///Retrieve last ticker synchronously
+    /**
+     * @param instrument instrument object
+     * @param tk variable which receives ticker
+     * @retval true received
+     * @retval false there is no last ticker stored
+     */
 
     bool get_last_ticker(const Instrument &instrument, Ticker &tk);
 
+    ///Retrieve last orderbook state synchronously
+    /**
+     * @param instrument instrument object
+     * @param ordb variable which receives orderbook
+     * @retval true received
+     * @retval false cannot be retrieved synchronously
+     */
     bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb);
 
-    virtual std::optional<IExchange::Icon> get_icon() const {return {};}
+    ///Retrieve exchange icon
+    std::optional<IExchange::Icon> get_icon() const;
 
-    static AbstractExchange *from_exchange(Exchange ex);
+    ///Get pointer to AbstractExchange from Exchange object
+    static BasicExchangeContext &from_exchange(Exchange ex);
+
+    std::string get_name() const;
+    std::string get_id() const;
+
+    ///Applies report to order object
+    /**
+     * Order object is owned by strategy and can be accessed anytime during processing,
+     * because there is no locking scheme. This means, that new order state must
+     * be applied synchronously with the strategy. This function is called in
+     * strategy thread before the order is passed to the strategy and allows to
+     * apply report to the order's internal state.
+     *
+     * @param order subject
+     * @param report report to apply
+     *
+     * @note the order must be created by this exchange, otherwise function can throw exception
+     */
+    virtual void order_apply_report(const Order &order, const Order::Report &report);
+
+
+    ///Applies fill to order object
+    /**
+     * Because order object can be modified only synchronously with the strategy,
+     * this function must be called in strategy thread.
+     *
+     * @param order order
+     * @param fill fill
+     *
+     * @note the order must be created by this exchange, otherwise function can throw exception
+     *
+     */
+    virtual void order_apply_fill(const Order &order, const Fill &fill);
+
+
+
+
+
 
 protected:
 
+    ///Object's lock, derived class must use this lock to lock internals
     std::recursive_mutex _mx;
 
     struct Subscription {
@@ -158,27 +223,54 @@ protected:
     std::map<Subscription, SubscriptionLimit> _subscriptions;
     std::map<Instrument, std::vector<IEventTarget *> > _instrument_update_waiting;
     std::map<Account, std::vector<IEventTarget *> > _account_update_waiting;
-    std::map<PBasicOrder, IEventTarget *, std::less<> > _orders;
+    std::map<Order, IEventTarget *, std::less<> > _orders;
 
 
-    virtual void do_subscribe(SubscriptionType type, const Instrument &i) = 0;
-    virtual void do_unsubscribe(SubscriptionType type, const Instrument &i) = 0;
-    virtual void do_update_account(const Account &a) = 0;
-    virtual void do_update_instrument(const Instrument &i) = 0;
-    virtual void do_batch_place(std::span<PBasicOrder> orders) = 0;
+    ///call this function when ticker for given instrument arrived
+    /**
+     * @param i instrument
+     * @param t ticker
+     */
+    virtual void income_data(const Instrument &i, const Ticker &t) override;
+    ///call this function when orderbook for given instrument arrived
+    /**
+     * @param i instrument
+     * @param o orderbook
+     */
+    virtual void income_data(const Instrument &i, const OrderBook &o) override;
+    ///call this function when account is updated
+    virtual void object_updated(const Account &i) override;
+    ///call this function when instrument is updated
+    virtual void object_updated(const Instrument &i) override;
+    ///call this function when order's state changed
+    /**
+     * As the orders are const, you cannot change state of the order directly. The
+     * state is changed during processing the event because orders are in possesion
+     * of the strategy
+     *
+     * @param order order instance
+     * @param state new state
+     * @param reason optional reason (for the state)
+     * @param message optional string message if error
+     */
+    virtual void order_state_changed(const Order &order, const Order::Report &report) override;
+    ///call this function for every fill on the order
+    /**
+     * @param order order instance
+     * @param fill fill information
+     */
+    virtual void order_fill(const Order &order, const Fill &fill) override;
+    ///call this function for every restored order from set passed to restore_orders()
+    /**
+     * @param target target argument passed to function restored_orders
+     * @param order restored order instance
+     */
+    virtual void order_restore(void *target, const Order &order) override;
 
-
-    void income_data(const Instrument &i, const Ticker &t);
-    void income_data(const Instrument &i, const OrderBook &t);
-    void object_updated(const Account &i);
-    void object_updated(const Instrument &i);
-    void order_state_changed(const PCBasicOrder &order, Order::State state, Order::Reason reason = Order::Reason::no_reason, std::string message = {});
-    void order_fill(const PCBasicOrder &order, const Fill &fill);
-    void order_restore(IEventTarget *target, const PBasicOrder &order);
-
+private:
     void send_subscription_notify(const Instrument &i, SubscriptionType type);
 
-
+    std::unique_ptr<IExchangeService> _ptr;
 
 };
 
@@ -186,13 +278,10 @@ protected:
 class BasicExchange: public IExchange {
 public:
 
-    BasicExchange(std::unique_ptr<AbstractExchange> impl, std::string label)
+    BasicExchange(std::unique_ptr<BasicExchangeContext> impl, std::string label)
         :_impl(std::move(impl)),_label(label) {}
 
     virtual std::string get_label() const override {return _label;};
-    virtual void list_instruments(Function<void(const Instrument&)> fn) const override {
-        _impl->list_instruments(std::move(fn));
-    }
     virtual std::string get_name() const override {
         return _impl->get_name();
     }
@@ -205,12 +294,20 @@ public:
     virtual void disconnect(void *t) const {
         _impl->disconnect(reinterpret_cast<const IEventTarget *>(t));
     }
-    virtual AbstractExchange *get_instance() const {return _impl.get();}
+    virtual BasicExchangeContext *get_instance() const {return _impl.get();}
 
+    virtual bool get_last_orderbook(const Instrument &instrument,
+            OrderBook &ordb) const override {
+        return _impl->get_last_orderbook(instrument, ordb);
+    }
+    virtual bool get_last_ticker(const Instrument &instrument,
+            Ticker &tk) const override {
+        return _impl->get_last_ticker(instrument, tk);
+    }
 
 
 protected:
-    std::unique_ptr<AbstractExchange> _impl;
+    std::unique_ptr<BasicExchangeContext> _impl;
     std::string _label;
 
 };

@@ -75,7 +75,7 @@ public:
     virtual StrategyConfig get_config() const = 0;
 
     ///Retrieves current time
-    virtual Timestamp get_current_time() const = 0;
+    virtual Timestamp get_event_time() const = 0;
 
     ///Sets time, which calls function wrapped into runnable object. It is still bound to strategy
     virtual void set_timer(Timestamp at, CompletionCB fnptr = {}, TimerID id = 0) = 0;
@@ -166,7 +166,7 @@ public:
     virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
     virtual Fills get_fills(const Instrument &, std::size_t ) const override{throw_error();}
     virtual Fills get_fills(const Instrument &, Timestamp )const  override{throw_error();}
-    virtual Timestamp get_current_time() const override{throw_error();}
+    virtual Timestamp get_event_time() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual void update_account(const Account &, CompletionCB) override{throw_error();}
     virtual Order bind_order(const Instrument &,  const Account &)override{throw_error();}
@@ -321,8 +321,21 @@ public:
             _ptr->update_instrument(i, std::move(fn));
         };
     }
-    ///Retrieves current time
-    Timestamp now() const {return _ptr->now();}
+    ///Retrieves time of current event
+    /**
+     * @return time of current event. This contains snapshot of real time clock,
+     * when current event was started. It returns same value for current
+     * event regardless on how long the event is executed.
+     *
+     * During backtest, this value doesn't contain real time value, but
+     * backtest's time value. When strategy needs source of the time for calculation
+     * it always should use event time.
+     *
+     * @note if coroutine awaits for asynchronous operation, calling
+     * of this function after co_await can return different time then
+     * value returned before co_await.
+     */
+    Timestamp get_event_time() const {return _ptr->get_event_time();}
     ///Sets timer, which triggers event, on strategy interface
     /**
      * @param at time point when timer is triggered
@@ -340,7 +353,7 @@ public:
      */
     template<typename A, typename B>
     void set_timer(std::chrono::duration<A, B> dur, TimerID id = 0) {
-        return _ptr->set_timer(now() + dur, {}, id);
+        return _ptr->set_timer(get_event_time() + dur, {}, id);
     }
 
     ///Schedule a function call to given time
@@ -366,7 +379,7 @@ public:
      */
     template<typename A, typename B, std::invocable<> Fn>
     void set_timer(std::chrono::duration<A, B> dur, Fn &&fn, TimerID id = 0) {
-        return _ptr->set_timer(now() + dur, make_runnable(std::forward<Fn>(fn)), id);
+        return _ptr->set_timer(get_event_time() + dur, make_runnable(std::forward<Fn>(fn)), id);
     }
 
     ///sleep until timestamp reached - coroutines
@@ -389,7 +402,7 @@ public:
     template<typename A, typename B>
     completion_awaiter sleep_for(std::chrono::duration<A, B> dur, TimerID id = 0) {
         return [&](auto fn) {
-            _ptr->set_timer(now()+dur, std::move(fn), id);
+            _ptr->set_timer(get_event_time()+dur, std::move(fn), id);
         };
     }
 

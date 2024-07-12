@@ -35,12 +35,17 @@ public:
         ///order has been canceled
         canceled,
         ///order has been filled
-        filled
+        filled,
+        ///inital state for restored order before its final state is restored
+        restoring
     };
 
 
     static bool is_done(State st) {
-        return st != State::sent && st != State::active && st != State::waiting;
+        return st != State::sent
+                && st != State::active
+                && st != State::waiting
+                && st != State::restoring;
     }
 
     enum class Reason {
@@ -80,6 +85,13 @@ public:
 
     };
 
+
+    ///carries report of an order (excepct fill)
+    struct Report {
+        State new_state;
+        Reason reason;
+        std::string message;
+    };
 
     enum class Behavior {
         ///standard behavior, reduce position, then open new position (no hedge)
@@ -334,6 +346,7 @@ public:
     using Behavior = IOrder::Behavior;
     using Options = IOrder::Options;
     using Origin = IOrder::Origin;
+    using Report = IOrder::Report;
 
     ///get order state
     State get_state() const {

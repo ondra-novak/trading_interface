@@ -53,6 +53,11 @@ public:
     virtual void on_orderbook(Instrument i, OrderBook ord) = 0;
 
     ///called when time reached on a timer (set_timer)
+    /**
+     * Called only when set_timer is used without a callback function, otherwise
+     * the callback function is called.
+     * @param id
+     */
     virtual void on_timer(TimerID id) = 0;
 
     ///called when order state is updated (market triggers) and also at the beginning for all open orders
@@ -84,6 +89,8 @@ public:
     virtual void on_order(Order) override {}
     virtual void on_signal(SignalNR) override {}
 };
+
+
 
 
 class IStrategyFactory {

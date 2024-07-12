@@ -4,11 +4,21 @@ file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
 
 file(MAKE_DIRECTORY ${CMAKE_HEADER_OUTPUT_DIRECTORY})
 
-set(OUTPUT "${CMAKE_HEADER_OUTPUT_DIRECTORY}/trading_api.h")
+set(OUTPUT "${CMAKE_HEADER_OUTPUT_DIRECTORY}/strategy_api.h"
+           "${CMAKE_HEADER_OUTPUT_DIRECTORY}/exchange_api.h")
 
 add_custom_command(
-    OUTPUT "${CMAKE_HEADER_OUTPUT_DIRECTORY}/trading_api.h"
-    COMMAND to_single_header ARGS api.h ${CMAKE_HEADER_OUTPUT_DIRECTORY}/trading_api.h
+    OUTPUT "${CMAKE_HEADER_OUTPUT_DIRECTORY}/strategy_api.h"
+    COMMAND to_single_header ARGS strategy_api.h ${CMAKE_HEADER_OUTPUT_DIRECTORY}/strategy_api.h
+    DEPENDS ${SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Generating single header"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${CMAKE_HEADER_OUTPUT_DIRECTORY}/exchange_api.h"
+    COMMAND to_single_header ARGS exchange_api.h ${CMAKE_HEADER_OUTPUT_DIRECTORY}/exchange_api.h
     DEPENDS ${SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Generating single header"

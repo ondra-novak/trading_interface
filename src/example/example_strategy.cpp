@@ -1,15 +1,10 @@
-#include <trading_api.h>
+#include <strategy_api.h>
 
 using namespace trading_api;
 
-class Example: public IStrategy {
+class Example: public AbstractStrategy {
 public:
-    virtual void on_ticker(Instrument i, Ticker tk) override;
-    virtual void on_orderbook(Instrument i, OrderBook tk) override;
-    virtual void on_timer(TimerID id) override;
     virtual void on_init(const Context &ctx, const Configuration &config) override;
-    virtual void on_fill(Order ord, Fill fill) override;
-    virtual void on_order(Order ord) override;
     virtual StrategyConfigSchema get_config_schema() const override;
 };
 
@@ -19,23 +14,10 @@ void strategy_main(Module &m) {
     m.export_strategy<Example>("example");
 }
 
-inline void Example::on_timer(TimerID id) {
-}
 
 inline void Example::on_init(const Context &ctx, const Configuration &config) {
 }
 
-inline void Example::on_fill(Order ord, Fill fill) {
-}
-
-inline void Example::on_order(Order ord) {
-}
-
-inline void Example::on_ticker(Instrument i, Ticker tk) {
-}
-
-inline void Example::on_orderbook(Instrument i, OrderBook tk) {
-}
 
 StrategyConfigSchema Example::get_config_schema() const {
     using namespace trading_api::params;

@@ -30,22 +30,38 @@ public:
 
     virtual ~IEventTarget () {}
     ///called when update of an instrument is finished
+    /**
+     * @param i instrument updated
+     * @note called under exchange's lock. It is expected, that event is put
+     * into execution queue. Don't call exchange object directly from the event. Do
+     * not perform blocking operations in this event
+     */
     virtual void on_event(const Instrument &i) = 0;
 
     ///called when update on an account is finished
+    /**
+     * @param a account updated
+     * @note called under exchange's lock. It is expected, that event is put
+     * into execution queue. Don't call exchange object directly from the event. Do
+     * not perform blocking operations in this event
+     */
     virtual void on_event(const Account &a) = 0;
 
     ///called when subscription update
+    /**
+     * @param i instrument
+     * @param subscription_type type of subscription
+     *
+     * @note actual market data are not part of event. When event is processed
+     * the strategy must read last market data from the exchange object
+     */
     virtual void on_event(const Instrument &i, SubscriptionType subscription_type) = 0;
 
     ///called when order state changed
-    virtual void on_event(const PBasicOrder &order, Order::State state) = 0;
-
-    ///called when order state changed
-    virtual void on_event(const PBasicOrder &order, Order::State state, Order::Reason reason, const std::string &message = {}) = 0;
+    virtual void on_event(const Order &order,const Order::Report &report) = 0;
 
     ///called when fill is detected
-    virtual void on_event(const PBasicOrder &order, const Fill &fill) = 0;
+    virtual void on_event(const Order &order, const Fill &fill) = 0;
 
 
 };

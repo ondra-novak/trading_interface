@@ -1,4 +1,5 @@
-#include "../trading_ifc/api.h"
+#include "../trading_ifc/strategy_api.h"
+#include "../trading_ifc/exchange_api.h"
 
 #include <iostream>
 #include <cstdlib>
@@ -10,3 +11,4 @@ int main(int argc, char **argv) {
 }
 
 void strategy_main(Module &) {}
+

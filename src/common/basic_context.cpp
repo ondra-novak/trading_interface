@@ -4,6 +4,6 @@
 namespace trading_api {
 
 
-template class BasicContext<MemoryStorage>;
+template class BasicContext<MemoryStorage, std::function<void(Timestamp, Function<void(Timestamp)>, const void *)> >;
 
 }

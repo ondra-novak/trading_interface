@@ -64,7 +64,7 @@ protected:
         };
     };
 
-    std::mutex _mx;
+    mutable std::mutex _mx;
     PriorityQueue<TimedEvent, TimedEvent::ordering> _timed_queue;
     Notify _ntf = [](Timestamp) {};
     Timestamp _next_notify = Timestamp::max();

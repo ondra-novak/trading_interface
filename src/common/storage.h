@@ -34,7 +34,6 @@ concept StorageType = requires(T v, const T cv,
     {cv.is_duplicate(fill)} ->std::same_as<bool>;
     {cv.get_fills(i,limit)}->std::same_as<Fills>;
     {cv.get_fills(i,tp)}->std::same_as<Fills>;
-    {cv.get_variables()}->std::same_as<Variables>;
     {cv.get_open_orders()}->std::same_as<std::vector<SerializedOrder> >;
 };
 
@@ -130,9 +129,6 @@ public:
     }
 
 
-    Variables get_variables() const {
-        return {{_variables.begin(), _variables.end()}};
-    }
 
     ///Retrieve all open orders (open known when they were stored)
     std::vector<SerializedOrder> get_open_orders() const {
