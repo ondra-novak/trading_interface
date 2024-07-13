@@ -1,46 +1,74 @@
 #pragma once
 
-#include "strategy.h"
+#ifndef TRADING_API_MODULE_ENTRY_POINT
+#define TRADING_API_MODULE_ENTRY_POINT
 
-#include <map>
+
 
 namespace trading_api {
 
+template<typename T>
+inline IModule::Factory<T> *IModule::Factory<T>::first = nullptr;
 
-class Module: public IStrategyFactory {
+
+namespace {
+
+inline std::atomic<std::size_t> object_counter;
+
+
+template<typename T>
+class ObjectCounter: public T {
 public:
-
-    using Factory = PStrategy (*)();
-
-    template<std::derived_from<IStrategy> Strategy>
-    void export_strategy(std::string_view name) noexcept {
-        strategies.emplace(std::string(name), []()->PStrategy{
-                return std::make_unique<Strategy>();
-        });
+    ObjectCounter() {
+        ++object_counter;
     }
-
-    virtual std::unique_ptr<IStrategy> create_strategy(std::string_view strategy_name) const noexcept {
-        auto iter = strategies.find(strategy_name);
-        if (iter == strategies.end()) return {};
-        return iter->second();
+    ~ObjectCounter() {
+        --object_counter;
     }
-
-protected:
-    std::map<std::string, Factory, std::less<> > strategies;
 };
+
+
+
+class Module: public IModule {
+public:
+    virtual Inventory<IStrategy> get_strategies() const override {
+        return Inventory<IStrategy>(IModule::Factory<IStrategy>::first);
+    }
+    virtual Inventory<IExchangeService> get_exchanges() const override {
+        return Inventory<IExchangeService>(IModule::Factory<IExchangeService>::first);
+    }
+    virtual bool can_unload() const override {
+        return object_counter.load() == 0;
+    }
+    virtual std::size_t get_active_objects() const override {
+        return object_counter.load();
+    }
+};
+
+}
+
+template<typename T>
+template<typename U>
+std::unique_ptr<T> IModule::Factory<T>::uhlp<U>::create() {
+    return std::unique_ptr<T>(new ObjectCounter<U>());
+}
+
+
+
 
 
 }
 
-void strategy_main(trading_api::Module &m) ;
 
 
 extern "C" {
-const trading_api::IStrategyFactory * __trading_api_strategy_entry_point() {
+const trading_api::IModule * __trading_api_module_entry_point() {
+
+
     static trading_api::Module module;
-    strategy_main(module);
     return &module;
 }
 }
 
 
+#endif

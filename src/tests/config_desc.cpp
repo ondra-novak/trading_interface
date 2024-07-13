@@ -7,10 +7,11 @@ int main() {
     std::string path(MODULE_PATH);
     std::string libpath = path + "example_strategy.so";
 
+    trading_api::ModuleRepository repo;
+    repo.add_module(libpath);
 
-    auto module = trading_api::load_strategy_module(libpath);
-    CHECK(module != nullptr);
-    auto strategy = module->create_strategy("example");
+
+    auto strategy = repo.create_strategy("Example");
     CHECK(strategy.get() != nullptr);
     auto config = strategy->get_config_schema();
     auto json = trading_api::config_schema_to_json(config);

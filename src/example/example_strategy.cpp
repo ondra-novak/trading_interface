@@ -1,4 +1,6 @@
-#include <strategy_api.h>
+#include <trading_api/strategy.h>
+#include <trading_api/module.h>
+
 
 using namespace trading_api;
 
@@ -12,10 +14,8 @@ protected:
 };
 
 
+EXPORT_STRATEGY(Example);
 
-void strategy_main(Module &m) {
-    m.export_strategy<Example>("example");
-}
 
 
 inline void Example::on_init(const Context &ctx, const Configuration &config) {

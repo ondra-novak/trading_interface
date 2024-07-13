@@ -4,13 +4,16 @@
 int main() {
 
     std::string path(MODULE_PATH);
-    std::string libpath = path + "example_strategy.so";
+    std::string strategy_path = path + "example_strategy.so";
+    std::string exchange_path = path + "example_exchange.so";
 
-
-    auto module = trading_api::load_strategy_module(libpath);
-    CHECK(module != nullptr);
-    auto strategy = module->create_strategy("example");
+    trading_api::ModuleRepository repo;
+    repo.add_module(strategy_path);
+    repo.add_module(exchange_path);
+    auto strategy = repo.create_strategy("Example");
     CHECK(strategy.get() != nullptr);
+    auto exchange = repo.create_exchange("ExampleExchange");
+    CHECK(exchange.get() != nullptr);
 
 
 }

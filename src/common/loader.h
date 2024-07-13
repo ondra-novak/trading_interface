@@ -1,7 +1,12 @@
 #pragma once
 
 #include "../trading_ifc/strategy.h"
+#include "../trading_ifc/exchange_service.h"
 
+#include <string>
+#include <memory>
+
+#include <list>
 namespace trading_api {
 
 
@@ -27,19 +32,40 @@ protected:
     mutable std::string what_msg;
 };
 
-///Load strategy from module
-/**
- * @param module_pathname pathname to SO module
- * @return pointer to strategy factory. Can return nullptr when initialization fails
- *
- * @note you can call this function only once per module. Do not call again
- * for the same module. Store the return value for later usage
- *
- * @exception
- */
-const IStrategyFactory *load_strategy_module(std::string module_pathname);
 
 
+class ModuleRepository {
+public:
+
+    ///add and load module into repository
+    /**
+     * @param module_pathname name of module
+     */
+    void add_module(const std::string &module_pathname);
+    ///create strategy object identified by name
+    std::unique_ptr<IStrategy> create_strategy(std::string_view name);
+    ///create exchange object identified by name
+    std::unique_ptr<IExchangeService> create_exchange(std::string_view name);
+    ///unload unused modules
+    /**
+     * Unused module is module which doesn't have any strategy or exchange
+     * active. Such modules are unloaded
+     */
+    void housekeeping();
+
+protected:
+    struct ModuleInfo {
+        std::string pathname;
+        void *handle;
+        const IModule *instance;
+    };
+    std::list<ModuleInfo> _modules;
+
+    template<typename Fn>
+    auto create_something(std::string_view name, Fn &&fn);
+
+
+};
 
 
 }

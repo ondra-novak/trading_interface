@@ -1,7 +1,10 @@
 #pragma once
 
+#include <variant>
+#include <span>
 #include <vector>
 #include <map>
+#include <string>
 
 namespace trading_api {
 

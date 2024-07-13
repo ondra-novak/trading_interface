@@ -2,7 +2,9 @@
 
 #include "exchange_context.h"
 
+
 #include "config_desc.h"
+#include "module_decl.h"
 namespace trading_api {
 
 
@@ -196,5 +198,19 @@ public:
 
 
 };
+
+///Export the strategy, so the strategy can be loaded by the loader
+/**
+ * @param class_name name of the strategy (class name). The strategy is
+ * registered under its name
+ */
+#define EXPORT_EXCHANGE(class_name) ::trading_api::IModule::Factory<IExchangeService> exchange_reg_##class_name(#class_name, std::in_place_type<class_name>)
+
+///Export the strategy, but specify other name
+/**
+ * @param class_name class name of strategy
+ * @param export_name exported name
+ */
+#define EXPORT_EXCHANGE_AS(class_name, export_name) ::trading_api::IModule::Factory<IExchangeService> exchange_reg_##class_name(export_name, std::in_place_type<class_name>)
 
 }

@@ -6,6 +6,7 @@
 #include "ticker.h"
 #include "timer.h"
 #include "config.h"
+#include "log.h"
 #include <span>
 
 namespace trading_api {
@@ -152,6 +153,8 @@ public:
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
 
+    virtual Log get_logger() = 0;
+
 };
 
 class NullContext: public IContext {
@@ -179,6 +182,7 @@ public:
     virtual std::string get_var(std::string_view ) override {throw_error();}
     virtual void enum_vars(std::string_view , const Function<void(std::string_view, std::string_view)> &)  override {throw_error();}
     virtual void enum_vars(std::string_view , std::string_view ,  const Function<void(std::string_view, std::string_view)> &)  override {throw_error();}
+    virtual Log get_logger() override {throw_error();}
     constexpr virtual ~NullContext() {}
 
 };
@@ -519,6 +523,9 @@ public:
     void unsubscribe(SubscriptionType type, const Instrument &i) {
         _ptr->unsubscribe(type, i);
     }
+
+    ///Retrieve logger object (for logging and output)
+    Log get_logger() {return _ptr->get_logger();}
 
 
 protected:
