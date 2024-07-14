@@ -26,7 +26,7 @@ public:
     virtual std::string get_id() const override {return {};}
     virtual std::optional<IExchange::Icon> get_icon() const override {return {};}
     virtual void update_instrument(const Instrument &i) override {}
-    virtual void create_instruments(std::vector<std::string> instruments, Account accunt, Function<void(std::vector<Account>)> cb) override {}
+    virtual void create_instruments(std::vector<std::string> instruments, Account accunt, Function<void(std::vector<Instrument>)> cb) override {}
     virtual void order_apply_report(const Order &order, const Order::Report &report) override {}
     virtual std::string get_name() const override {return {};}
     virtual void subscribe(SubscriptionType type,const Instrument &i) override {};
