@@ -19,27 +19,11 @@ struct Fill {
      */
     Timestamp time;
 
-    ///Exchange's unique identifier (mandatory)
-    /** Unique identifier of this fill. It is used to detect duplicated fills.
-     * If this identifier is not unique, fills can be mistakely discarded.
-     */
-    std::string fill_id;
+    ///exchange's unique ID
+    std::string id;
 
-    ///Exchange's order unique identifier (mandatory)
-    /**
-     * An identifer of the order, which is responsible of this fill. This
-     * id must be filled, but it is allowed to fill the field with
-     * information unrelated to real world. However it must be deterministic,
-     * for example, when this fill is repeatedly fetched from the exchange,
-     * this id must be same for every attempt.
-     *
-     * Main purpose of such id is help strategy to connect multiple fills to
-     * single order - for instance to calculate average fill price
-     */
-    std::string order_id;
-
-    ///associated instrument identifier
-    std::string instrument_id;
+    ///User defined label (for filtering)
+    std::string label;
 
     ///Price of this fill
     double price;
@@ -58,15 +42,9 @@ struct Fill {
     double fees;
 
     bool operator==(const Fill & other) const {
-        return fill_id == other.fill_id;
+        return id == other.id;
     }
 
-    struct Hasher {
-        auto operator()(const Fill &fill) const {
-            std::hash<std::string> hasher;
-            return hasher(fill.fill_id);
-        }
-    };
 
 };
 

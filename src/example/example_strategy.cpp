@@ -6,11 +6,10 @@ using namespace trading_api;
 
 class Example: public AbstractStrategy {
 public:
-    virtual void on_init(const Context &ctx, const Configuration &config) override;
+    virtual void on_init(const Context &ctx) override;
     virtual StrategyConfigSchema get_config_schema() const override;
 protected:
     Context _context;
-    Configuration _config;
 };
 
 
@@ -18,9 +17,10 @@ EXPORT_STRATEGY(Example);
 
 
 
-inline void Example::on_init(const Context &ctx, const Configuration &config) {
+void Example::on_init(const Context &ctx) {
     _context = ctx;
-    _config = config;
+    _context.mget<int>("aaa", [](auto a, int b){});
+    _context.mget<int>("aaa","bbb", [](auto a,int b){});
 
 }
 

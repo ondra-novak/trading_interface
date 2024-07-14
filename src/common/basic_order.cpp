@@ -25,19 +25,19 @@ BasicOrder::BasicOrder(Instrument instrument, Account account, Setup setup, Orig
     , _origin(origin) {}
 
 BasicOrder::State BasicOrder::get_state() const {
-    return _state;
+    return _status.last_report.new_state;
 }
 
 double BasicOrder::get_last_price() const {
-    return _last_price;
+    return _status.last_price;
 }
 
 std::string_view BasicOrder::get_message() const {
-    return _message;
+    return _status.last_report.message;
 }
 
 double BasicOrder::get_filled() const {
-    return _filled;
+    return _status.filled;
 }
 
 const BasicOrder::Setup &BasicOrder::get_setup() const {
@@ -45,26 +45,11 @@ const BasicOrder::Setup &BasicOrder::get_setup() const {
 }
 
 BasicOrder::Reason BasicOrder::get_reason() const {
-    return _reason;
+    return _status.last_report.reason;
 }
 
 Instrument BasicOrder::get_instrument() const {
     return _instrument;
-}
-
-void BasicOrder::add_fill(double price, double amount) {
-    _last_price = price;
-    _filled += amount;
-}
-
-void BasicOrder::set_state(State st) {
-    _state = st;
-}
-
-void BasicOrder::set_state(State st, Reason r, std::string message) {
-    _message = std::move(message);
-    _reason = r;
-    _state = st;
 }
 
 ErrorOrder::ErrorOrder(Instrument instrument, Account account, Reason r, std::string message)
@@ -86,6 +71,40 @@ BasicOrder::Origin BasicOrder::get_origin() const {
 
 std::string_view ErrorOrder::get_message() const {
     return _message;
+}
+
+void BasicOrder::Status::add_fill(double price, double amount) {
+    last_price = price;
+    filled+= amount;
+}
+
+void BasicOrder::Status::update_report(Order::Report report) {
+    last_report = report;
+}
+
+Account BasicOrder::get_account() const {
+    return _account;
+}
+
+BasicOrder::BasicOrder(Order replaced, Setup setup, bool amend, Origin origin)
+    :BasicOrder(replaced.get_instrument(), replaced.get_account(), std::move(setup), std::move(origin)) {
+    _replaced = replaced.get_handle();
+    _amend = amend;
+}
+
+std::string BasicOrder::get_id() const {
+    std::ostringstream str;
+    str << this;
+    return str.str();
+}
+
+Order BasicOrder::get_replaced_order() const {
+    auto lk = _replaced.lock();
+    if (lk) {
+        return Order(lk);
+    } else {
+        return {};
+    }
 }
 
 }

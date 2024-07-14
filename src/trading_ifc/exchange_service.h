@@ -4,7 +4,6 @@
 
 
 #include "config_desc.h"
-#include "module_decl.h"
 namespace trading_api {
 
 

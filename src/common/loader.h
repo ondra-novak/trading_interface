@@ -2,6 +2,7 @@
 
 #include "../trading_ifc/strategy.h"
 #include "../trading_ifc/exchange_service.h"
+#include "../trading_ifc/module_decl.h"
 
 #include <string>
 #include <memory>

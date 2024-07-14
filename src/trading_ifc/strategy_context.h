@@ -69,11 +69,11 @@ public:
     ///request update instrument
     virtual void update_instrument(const Instrument &i, CompletionCB complete_ptr) = 0;
 
-    virtual std::vector<Account> get_accounts() const = 0;
+    virtual std::span<const Account> get_accounts() const = 0;
 
-    virtual std::vector<Instrument> get_instruments() const = 0;
+    virtual std::span<const Instrument> get_instruments() const = 0;
 
-    virtual StrategyConfig get_config() const = 0;
+    virtual const StrategyConfig &get_config() const = 0;
 
     ///Retrieves current time
     virtual Timestamp get_event_time() const = 0;
@@ -115,10 +115,10 @@ public:
     virtual Order replace(const Order &order, const Order::Setup &setup, bool amend) = 0;
 
     ///Retrieve recent fills
-    virtual Fills get_fills(const Instrument &i, std::size_t limit) const = 0;
+    virtual Fills get_fills(std::size_t limit, std::string_view filter = {}) const = 0;
 
     ///Retrieve recent fills
-    virtual Fills get_fills(const Instrument &i, Timestamp tp) const = 0;
+    virtual Fills get_fills(Timestamp tp, std::string_view filter = {}) const = 0;
 
     ///set persistent variable
     /**
@@ -128,11 +128,11 @@ public:
      */
     virtual void set_var(std::string_view var_name, std::string_view value) = 0;
 
-    virtual std::string get_var(std::string_view var_name) = 0;
+    virtual std::string get_var(std::string_view var_name) const = 0;
 
-    virtual void enum_vars(std::string_view prefix, const Function<void(std::string_view, std::string_view)> &fn) = 0;
+    virtual void enum_vars(std::string_view prefix,  Function<void(std::string_view, std::string_view)> &fn) const = 0;
 
-    virtual void enum_vars(std::string_view start, std::string_view end,  const Function<void(std::string_view, std::string_view)> &fn) = 0;
+    virtual void enum_vars(std::string_view start, std::string_view end,  Function<void(std::string_view, std::string_view)> &fn) const = 0;
 
 
     ///Deletes persistently stored variable
@@ -153,22 +153,22 @@ public:
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
 
-    virtual Log get_logger() = 0;
+    virtual Log get_logger() const = 0;
 
 };
 
 class NullContext: public IContext {
 public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
-    virtual std::vector<Account> get_accounts() const  override {throw_error();};
-    virtual std::vector<Instrument> get_instruments() const override {throw_error();};
-    virtual StrategyConfig get_config() const override {throw_error();};
+    virtual std::span<const Account> get_accounts() const  override {throw_error();};
+    virtual std::span<const Instrument> get_instruments() const override {throw_error();};
+    virtual const StrategyConfig &get_config() const override {throw_error();};
     virtual void set_timer(Timestamp , CompletionCB, TimerID ) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();}
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
     virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
-    virtual Fills get_fills(const Instrument &, std::size_t ) const override{throw_error();}
-    virtual Fills get_fills(const Instrument &, Timestamp )const  override{throw_error();}
+    virtual Fills get_fills(std::size_t , std::string_view) const override {throw_error();}
+    virtual Fills get_fills(Timestamp , std::string_view ) const override {throw_error();}
     virtual Timestamp get_event_time() const override{throw_error();}
     virtual bool clear_timer(TimerID ) override{throw_error();}
     virtual void update_account(const Account &, CompletionCB) override{throw_error();}
@@ -179,10 +179,10 @@ public:
     virtual void unset_var(std::string_view ) override{throw_error();};
     virtual void subscribe(SubscriptionType , const Instrument &) override {throw_error();}
     virtual void unsubscribe(SubscriptionType , const Instrument &) override {throw_error();}
-    virtual std::string get_var(std::string_view ) override {throw_error();}
-    virtual void enum_vars(std::string_view , const Function<void(std::string_view, std::string_view)> &)  override {throw_error();}
-    virtual void enum_vars(std::string_view , std::string_view ,  const Function<void(std::string_view, std::string_view)> &)  override {throw_error();}
-    virtual Log get_logger() override {throw_error();}
+    virtual std::string get_var(std::string_view ) const override  {throw_error();}
+    virtual void enum_vars(std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override {throw_error();}
+    virtual void enum_vars(std::string_view , std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override  {throw_error();}
+    virtual Log get_logger() const override {throw_error();}
     constexpr virtual ~NullContext() {}
 
 };
@@ -197,11 +197,11 @@ public:
     ContextT(PtrType ptr):_ptr(std::move(ptr)) {}
 
 
-    std::vector<Account> get_accounts() const {return _ptr->get_accounts();}
+    std::span<const Account> get_accounts() const {return _ptr->get_accounts();}
 
-    std::vector<Instrument> get_instruments() const {return _ptr->get_instruments();}
+    std::span<const Instrument> get_instruments() const {return _ptr->get_instruments();}
 
-    virtual StrategyConfig get_config() const {return _ptr->get_config();}
+    const StrategyConfig &get_config() const {return _ptr->get_config();}
 
 
 
@@ -216,8 +216,11 @@ public:
      * content for both key and value. There is also no limit of size. However
      * keep in mind, that to store longer keys and values can have impact on
      * performance.
+     *
+     * @note store operation is asynchronous. Calling get() immediately
+     * after set() can still return previous value
      */
-    void store(std::string_view key, std::string_view value) {
+    void set(std::string_view key, std::string_view value) {
         _ptr->set_var(key, value);
     }
 
@@ -229,43 +232,92 @@ public:
      * @param value any binary serializable value, which includes all basic types, enums, and classes
      * with trivial copy constructors (must not contain pointer)
      *
+     * @note store operation is asynchronous.Calling get() immediately
+     * after set() can still return previous value
      */
     template<BinarySerializable T>
-    void store(std::string_view key, const T &value) {
+    void set(std::string_view key, const T &value) {
         _ptr->set_var(key,serialize_binary(value));
     }
 
-    std::string retrieve(std::string_view varname) {
-        return _ptr->retrieve(varname);
+    ///retrieve stored value from database
+    /**
+     * @param varname name of variable
+     * @return content. If the variable doesn't exist, returns empty string
+     */
+    std::string get(std::string_view varname) const{
+        return _ptr->get_var(varname);
     }
+    ///retrieve stored value
+    /**
+     * @param key variable name
+     * @param default_value default value in case that variable is undefined
+     * @return
+     */
     template<BinarySerializable T>
-    T retrieve(std::string_view key, const T &default_value) {
-        return deserialize_binary(_ptr->retrieve(key), default_value);
+    T get(std::string_view key, const T &default_value) const{
+        return deserialize_binary(_ptr->get_var(key), default_value);
     }
 
+    ///retrieve multiple variables
+    /**
+     * @param prefix specifies prefix, function retrieves all variables starting
+     * by this prefix
+     * @param fn a function, which receives pair of key=value
+     */
     template<std::invocable<std::string_view, std::string_view> Fn>
-    void retrieve(std::string_view prefix, Fn &&fn) {
-        return _ptr->enum_vars(prefix, std::forward<Fn>(fn));
+    void mget(std::string_view prefix, Fn &&fn) const{
+        Function<void(std::string_view, std::string_view)> ffn(std::forward<Fn>(fn));
+        _ptr->enum_vars(prefix, ffn);
     }
 
+    ///retrieve multiple variables
+    /**
+     *
+     * @tparam T type of value
+     * @param prefix specifies prefix, function retrieves all variables starting
+     * by this prefix
+     * @param fn a function, which receives pair of key=value
+     */
     template<BinarySerializable T, std::invocable<std::string_view, T> Fn>
-    void retrieve(std::string_view prefix, Fn &&fn) {
-        return _ptr->enum_vars(prefix, [&](std::string_view a, std::string_view b){
+    void mget(std::string_view prefix, Fn &&fn) const{
+
+        Function<void(std::string_view, std::string_view)> ffn([&](auto a, auto b){
             auto opt = deserialize_binary<T>(b);
             if (opt.has_value()) fn(a,*opt);
         });
+        _ptr->enum_vars(prefix, ffn);
     }
+    ///retrieve multiple variables
+    /**
+     * @param from begining name
+     * @param end ending name (inclusive)
+     * @param fn a function, which receives pair of key=value
+     * @note variables are ordered binary
+     */
     template<std::invocable<std::string_view, std::string_view> Fn>
-    void retrieve(std::string_view from, std::string_view to, Fn &&fn) {
-        return _ptr->enum_vars(from, to, std::forward<Fn>(fn));
+    void mget(std::string_view from, std::string_view to, Fn &&fn) const{
+        Function<void(std::string_view, std::string_view)> ffn(std::forward<Fn>(fn));
+        return _ptr->enum_vars(from, to, ffn);
     }
 
+    ///retrieve multiple variables
+    /**
+     *
+     * @tparam T type of value
+     * @param from begining name
+     * @param end ending name (inclusive)
+     * @param fn a function, which receives pair of key=value
+     */
     template<BinarySerializable T, std::invocable<std::string_view, T> Fn>
-    void retrieve(std::string_view from, std::string_view to, Fn &&fn) {
-        return _ptr->enum_vars(from, to, [&](std::string_view a, std::string_view b){
+    void mget(std::string_view from, std::string_view to, Fn &&fn) const{
+
+        Function<void(std::string_view, std::string_view)> ffn([&](auto a, auto b){
             auto opt = deserialize_binary<T>(b);
             if (opt.has_value()) fn(a,*opt);
         });
+
+        return _ptr->enum_vars(from, to, ffn);
     }
 
 
@@ -456,12 +508,12 @@ public:
     }
 
     ///Retrieve last fills
-    Fills get_fills(const Instrument &i, std::size_t limit) {
-        return _ptr->get_fills(i, limit);
+    Fills get_fills(std::size_t limit, const Instrument &i = {}, const Account &a = {}) {
+        return _ptr->get_fills(limit, i, a);
     }
 
-    Fills get_fills(const Instrument &i, Timestamp tp) {
-        return _ptr->get_fills(i, tp);
+    Fills get_fills(Timestamp tp, const Instrument &i = {}, const Account &a = {}) {
+        return _ptr->get_fills(tp, i, a);
     }
 
     ///allocate equity for current strategy

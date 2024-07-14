@@ -57,13 +57,15 @@ public:
 
     void replace(typename Super::const_iterator it, const T &val) {
         bool isless= _cmp(val, *it);
-        *it = val;
+        std::size_t index = std::distance(Super::cbegin(), it);
+        Super::at(index) = val;
         priority_altered(it, isless);
     }
 
     void replace(typename Super::const_iterator it, T &&val) {
         bool isless= _cmp(val, *it);
-        *it = val;
+        std::size_t index = std::distance(Super::cbegin(), it);
+        Super::at(index) = std::move(val);
         priority_altered(it, isless);
     }
 

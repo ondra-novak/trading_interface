@@ -2,7 +2,6 @@
 #include "strategy_context.h"
 #include "config_desc.h"
 #include "orderbook.h"
-#include "module_decl.h"
 
 
 namespace trading_api {
@@ -30,15 +29,9 @@ public:
 
     virtual StrategyConfigSchema get_config_schema() const = 0;
 
-    struct Configuration {
-        AccountList accounts;
-        InstrumentList instruments;
-        StrategyConfig config;
-    };
-
 
     ///called on initialization
-    virtual void on_init(const Context &ctx, const Configuration &config) = 0;
+    virtual void on_init(const Context &ctx) = 0;
 
     ///called when ticker changes (market triggers)
     /**
@@ -66,7 +59,19 @@ public:
     virtual void on_order(Order ord) = 0;
 
     ///called when fill is detected
-    virtual void on_fill(Order ord, Fill fill) = 0;
+    /**
+     * @param ord associated order
+     * @param fill recorded fill
+     * @return strategy's custom label. This allows to filter fills later. This
+     * is also critical to calculate pnl. It is recommended to use different label
+     * for different currency
+     *
+     * @note the label can have a an internal structure.
+     *      you can filter labels by a prefix. For example "usd_1234" means
+     *      usd for currency and 1234 is custom identifier. Label don't need to be
+     *      unique.
+     */
+    virtual std::string on_fill(Order ord, const Fill &fill) = 0;
 
     ///called when external signal
     /**
@@ -74,6 +79,11 @@ public:
      */
     virtual void on_signal(SignalNR signalnr) = 0;
 
+    ///called when unhandled exception is detected anywhere in the strategy
+    /**
+     * Default implementation throws exception back, so it is processed by control object
+     */
+    virtual void on_unhandled_exception() = 0;
 };
 
 
@@ -83,13 +93,14 @@ public:
         return {};
     }
 
-    virtual void on_init(const Context &ctx, const Configuration &config) override = 0;
+    virtual void on_init(const Context &ctx) override = 0;
     virtual void on_orderbook(Instrument, OrderBook ) override {}
     virtual void on_timer(TimerID) override {};
     virtual void on_ticker(Instrument, Ticker ) override {}
-    virtual void on_fill(Order, Fill) override {}
+    virtual std::string on_fill(Order, const Fill &) override {return {};}
     virtual void on_order(Order) override {}
     virtual void on_signal(SignalNR) override {}
+    virtual void on_unhandled_exception() override {throw;}
 };
 
 

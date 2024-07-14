@@ -72,6 +72,33 @@ public:
 
     explicit Log(std::shared_ptr<ILog> ptr):_ptr(std::move(ptr)),_min_level(_ptr->get_min_level()) {}
 
+    ///Create new log object with context
+    /**
+     * @param other source log object
+     * @param pattern pattern to format context
+     * @param args arguments to format context
+     *
+     * @note context is copied to every log line in square brackets
+     *      [context1][context2][context3] log line
+     */
+    template<typename ... Args>
+    Log(const Log &other, std::string_view pattern, Args && ... args)
+        :_ptr(other._ptr)
+        ,_buffer(other._buffer)
+        ,_min_level(other._min_level)
+    {
+        append_context(pattern, std::forward<Args>(args)...);
+    }
+
+    template<typename ... Args>
+    Log(Log &&other, std::string_view pattern, Args && ... args)
+        :_ptr(std::move(other._ptr))
+        ,_buffer(std::move(other._buffer))
+        ,_min_level(other._min_level)
+    {
+        append_context(pattern, std::forward<Args>(args)...);
+    }
+
     template<typename ... Args>
     void output(Serverity level, std::string_view pattern, Args && ... args) {
         if (level >= _min_level) {
@@ -81,21 +108,35 @@ public:
                 format(os, pattern, std::forward<Args>(args)...);
             }
             _ptr->output(level, {_buffer.data(), _buffer.size()});
-            _buffer.clear();
+            _buffer.resize(_context_size);
         }
     }
+
 
 protected:
     std::shared_ptr<ILog> _ptr;
     std::vector<char> _buffer;
     Serverity _min_level;
+    std::size_t _context_size = 0;
+
+    template<typename ... Args>
+    void append_context(std::string_view pattern, Args && ... args) {
+        _buffer.push_back('[');
+        {
+            vector_streambuf buffer(_buffer);
+            std::ostream os(&buffer);
+            format(os, pattern, std::forward<Args>(args)...);
+        }
+        _buffer.push_back(']');
+        _context_size = _buffer.size();
+    }
 
     template<typename T>
     void format_item(std::ostream &out, const T &val) {
         if constexpr(std::is_invocable_v<T>) {
             format_item(out,val());
         } else if constexpr(is_container<T>) {
-            out << '[';
+            out << '(';
             auto beg = val.begin();
             auto end = val.end();
             if (beg != end) {
@@ -107,7 +148,7 @@ protected:
                     ++beg;
                 }
             }
-            out << ']';
+            out << ')';
         } else if constexpr(is_pair<T>) {
             _buffer.push_back('<');
             format_item(val.first);
@@ -120,7 +161,7 @@ protected:
     }
 
     template<typename ... Args>
-    void format(std::ostream &out, std::string pattern, Args && ... args) {
+    void format(std::ostream &out, std::string_view pattern, Args && ... args) {
         std::bitset<64> mask={};
         auto iter = pattern.begin();
         auto end = pattern.end();
@@ -155,7 +196,6 @@ protected:
             format_item(out, val);
         }
     }
-    template<typename T>
     void format_nth_item(unsigned int index, std::ostream &out) {
         out << "{" << index << "}";
     }

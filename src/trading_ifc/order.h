@@ -12,7 +12,10 @@ namespace trading_api {
 
 class Instrument;
 
-using SerializedOrder = std::string;
+struct SerializedOrder{
+    std::string order_id;   //order unique identifier
+    std::string order_content;  //binary content of the order
+};
 
 class IOrder {
 public:

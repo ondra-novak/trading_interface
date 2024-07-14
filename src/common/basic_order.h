@@ -39,8 +39,18 @@ protected:
 class BasicOrder: public IOrder {
 public:
 
+    struct Status {
+        double filled = 0;
+        double last_price = 0;
+        Order::Report last_report = {State::sent, Reason::no_reason, {}};
+
+        void add_fill(double price, double amount);
+        void update_report(Order::Report report);
+    };
+
 
     BasicOrder(Instrument instrument, Account account, Setup setup, Origin origin);
+    BasicOrder(Order replaced, Setup setup, bool amend, Origin origin);
     virtual State get_state() const override;
     virtual double get_last_price() const override;
     virtual std::string_view get_message() const override;
@@ -48,30 +58,34 @@ public:
     virtual const Setup &get_setup() const override;
     virtual Reason get_reason() const override;
     virtual Instrument get_instrument() const override;
-    virtual SerializedOrder to_binary() const override = 0;
+    virtual SerializedOrder to_binary() const override {return {};}
     virtual Origin get_origin() const override ;
+    virtual Account get_account() const override;
+    virtual std::string get_id() const override;
 
-    void add_fill(double price, double amount);
-    void set_state(State st);
-    void set_state(State st, Reason r, std::string message);
+    Status &get_status() const {
+        return _status;
+    }
+
+    Order get_replaced_order() const;
 
 
 
 protected:
+
+
     Setup _setup;
     Instrument _instrument;
     Account _account;
     Origin _origin;
+    std::weak_ptr<const IOrder> _replaced;
+    bool _amend = false;
 
-    double _filled = 0;
-    double _last_price = 0;
-    State _state = State::sent;
-    Reason _reason = Reason::no_reason;
-    std::string _message = {};
+    mutable Status _status;
+
+
 };
 
-using PBasicOrder = std::shared_ptr<BasicOrder>;
-using PCBasicOrder = std::shared_ptr<const BasicOrder>;
 
 
 }
