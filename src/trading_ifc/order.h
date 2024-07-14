@@ -15,6 +15,10 @@ class Instrument;
 struct SerializedOrder{
     std::string order_id;   //order unique identifier
     std::string order_content;  //binary content of the order
+
+    friend bool unused(const SerializedOrder &ord) {
+        return ord.order_id.empty() && ord.order_content.empty();
+    }
 };
 
 class IOrder {

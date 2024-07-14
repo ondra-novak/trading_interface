@@ -102,7 +102,7 @@ public:
      * @note each instrument should be created only once. Repeatedly called this function
      * with same identifier should return the same instrument.
      */
-    virtual void create_instruments(std::vector<std::string> instruments, Account accunt, Function<void(std::vector<Account>)> cb) = 0;
+    virtual void create_instruments(std::vector<std::string> instruments, Account accunt, Function<void(std::vector<Instrument>)> cb) = 0;
 
 
     ///Get exchange human readable name

@@ -90,6 +90,10 @@ public:
 
     virtual Exchange get_exchange() const = 0;
 
+    ///Retrieve internal instrument ID
+    virtual std::string get_id() const = 0;
+
+
     class Null;
 };
 
@@ -104,6 +108,7 @@ public:
     virtual Position get_position_by_id(const Instrument &, PositionID ) const override {return {};}
     virtual std::string get_label() const override {return {};}
     virtual Exchange get_exchange() const override {return {};}
+    virtual std::string get_id() const override {return {};}
 };
 
 
@@ -173,6 +178,8 @@ public:
 
     ///Retrieve exchange instance, where this account is managed
     Exchange get_exchange() const {return _ptr->get_exchange();}
+
+    std::string get_id() const {return _ptr->get_id();}
 
 
 };

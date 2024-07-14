@@ -9,6 +9,12 @@ class OrderBook {
 public:
 
 
+    struct Update {
+        Side side;
+        double level;
+        double amount;
+    };
+
 
     auto &bid() {return _bid_side;}
     auto &ask() {return _ask_side;}
@@ -22,7 +28,14 @@ public:
     void update_ask(double price, double amount) {
         if (amount <= 0) _ask_side.erase(price);
         else _ask_side.replace(price, amount);
+    }
 
+    void update(const Update &up) {
+        switch (up.side) {
+            case Side::buy: update_bid(up.level, up.amount);break;
+            case Side::sell: update_ask(up.level, up.amount);break;
+            default:break;
+        }
     }
 
     void remove_ask_to(double price) {

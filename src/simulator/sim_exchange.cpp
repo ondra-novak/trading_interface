@@ -22,6 +22,7 @@ void SimExchange::order_apply_fill(const Order &order, const Fill &fill) {
 }
 
 void SimExchange::update_account(const Account &a) {
+    ctx.object_updated(a);
 }
 
 Order SimExchange::create_order_replace(const Order &replace,
@@ -31,18 +32,23 @@ Order SimExchange::create_order_replace(const Order &replace,
 }
 
 std::string SimExchange::get_id() const {
+    return "simul";
 }
 
 std::optional<IExchange::Icon> SimExchange::get_icon() const {
+    return {};
 }
 
-void SimExchange::subscribe(SubscriptionType type, const Instrument &i) {
+void SimExchange::subscribe(SubscriptionType , const Instrument &) {
+    //empty
 }
 
 void SimExchange::update_instrument(const Instrument &i) {
+    ctx.object_updated(i);
 }
 
-void SimExchange::unsubscribe(SubscriptionType type, const Instrument &i) {
+void SimExchange::unsubscribe(SubscriptionType , const Instrument &i) {
+    //empty
 }
 
 void SimExchange::order_apply_report(const Order &order,
@@ -55,32 +61,90 @@ void SimExchange::order_apply_report(const Order &order,
 
 void SimExchange::create_accounts(std::vector<std::string> account_idents,
         Function<void(std::vector<Account>)> cb) {
+    std::vector<Account> acc;
+    for (const auto &id : account_idents) {
+        auto iter = _accounts.find(id);
+        if (iter != _accounts.end()) acc.push_back(iter->second);
+    }
+    cb(std::move(acc));
 }
 
-void SimExchange::batch_cancel(std::span<Order> orders) {
+
+void SimExchange::restore_orders(void *context, std::span<SerializedOrder> orders) {
+    //todo
 }
 
-void SimExchange::restore_orders(void *context,
-        std::span<SerializedOrder> orders) {
-}
-
-void SimExchange::batch_place(std::span<Order> orders) {
-}
 
 void SimExchange::create_instruments(std::vector<std::string> instruments,
-        Account accunt, Function<void(std::vector<Account>)> cb) {
+        Account , Function<void(std::vector<Instrument>)> cb) {
+    std::vector<Instrument> instr;
+    for (const auto &id : instruments) {
+        auto iter = _instruments.find(id);
+        if (iter != _instruments.end()) instr.push_back(iter->second);
+    }
+    cb(std::move(instr));
 }
 
 std::string SimExchange::get_name() const {
     return "Simulator";
 }
 
-void SimExchange::send_ticker(const Instrument &i, const Ticker &tk) {
-    ctx.income_data(i, tk);
+
+SimExchange::SimExchange(GlobalScheduler scheduler, Config config)
+:_scheduler(std::move(scheduler))
+{
+    std::transform(config.accounts.begin(), config.accounts.end(),
+            std::inserter(_accounts, _accounts.end()), [&](const Account &a){
+        return std::pair(a.get_id(), a);
+    });
+    std::transform(config.instruments.begin(), config.instruments.end(),
+            std::inserter(_instruments, _instruments.end()), [&](const Instrument &a){
+        return std::pair(a.get_id(), a);
+    });
 }
 
-void SimExchange::send_orderbook(const Instrument &i, const OrderBook &ordb) {
-    ctx.income_data(i, ordb);
+void SimExchange::on_timer(Timestamp tp) {
+    std::lock_guard _(_mx);
+    if (_price_data.empty()) return;
+    if (_price_data.front().tp <= tp) {
+        auto v = std::move(_price_data.front());
+        _price_data.pop();
+        if (std::holds_alternative<Ticker>(v.data)) {
+            const auto &tk = std::get<Ticker>(v.data);
+            ctx.income_data(v.i, tk);
+        } else if (std::holds_alternative<Ticker>(v.data)) {
+            const auto &up = std::get<OrderBook::Update>(v.data);
+            OrderBook &ob = _orderbooks[v.i];
+            ob.update(up);
+            ctx.income_data(v.i, ob);
+        }
+    }
+    reschedule();
 }
+
+void SimExchange::reschedule() {
+    if (_price_data.empty()) return;
+    _scheduler(_price_data.front().tp, [this](Timestamp st){on_timer(st);}, this);
+}
+
+void SimExchange::add_record(const Timestamp &tp, const Instrument &i, const OrderBook::Update &ordb) {
+    std::lock_guard _(_mx);
+    _price_data.push({tp, i, ordb});
+    reschedule();
+}
+
+void SimExchange::add_record(const Timestamp &tp, const Instrument &i, const Ticker &tk) {
+    _price_data.push({tp, i, tk});
+    reschedule();
+}
+
+void SimExchange::batch_place(std::span<Order> orders) {
+    //todo
+}
+
+void SimExchange::batch_cancel(std::span<Order> orders) {
+    //todo
+}
+
 
 }

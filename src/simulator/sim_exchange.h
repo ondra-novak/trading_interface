@@ -1,12 +1,25 @@
 #pragma once
 
 #include "../trading_ifc/exchange_service.h"
+#include "../trading_ifc/ticker.h"
+#include "../trading_ifc/orderbook.h"
+#include "../common/priority_queue.h"
 
 #include <vector>
 namespace trading_api {
 
 class SimExchange: public IExchangeService {
 public:
+
+    struct Config {
+        std::vector<Account> accounts;
+        std::vector<Instrument> instruments;
+    };
+
+    using GlobalScheduler = std::function<void(Timestamp,std::function<void(Timestamp)>, const void *)>;
+
+    SimExchange(GlobalScheduler scheduler, Config config);
+
     virtual void init(ExchangeContext context, const StrategyConfig &config) override;
     virtual void create_accounts(std::vector<std::string> account_idents,
             Function<void(std::vector<Account>)> cb) override;
@@ -29,21 +42,39 @@ public:
     virtual void unsubscribe(SubscriptionType type, const Instrument &i)
             override;
     virtual void create_instruments(std::vector<std::string> instruments,
-            Account accunt, Function<void(std::vector<Account>)> cb) override;
+            Account accunt, Function<void(std::vector<Instrument>)> cb) override;
     virtual void order_apply_report(const Order &order,
             const Order::Report &report) override;
     virtual std::string get_name() const override;
 
-    void send_ticker(const Instrument &i, const Ticker &tk);
-    void send_orderbook(const Instrument &i, const OrderBook &ordb);
+
+    void add_record(const Timestamp &tp, const Instrument &i, const Ticker &tk);
+    void add_record(const Timestamp &tp, const Instrument &i, const OrderBook::Update &ordb);
 
 protected:
 
+    struct Record {
+        Timestamp tp;
+        Instrument i;
+        std::variant<Ticker, OrderBook::Update> data;
+        struct ordering {
+            bool operator()(const Record &a, const Record &b) const {
+                return a.tp > b.tp;
+            }
+        };
+    };
+
+
+    std::mutex _mx;
     ExchangeContext ctx;
-    std::vector<Account> _accounts;
-    std::vector<Instrument> _instruments;
+    GlobalScheduler _scheduler;
+    std::unordered_map<std::string, Account> _accounts;
+    std::unordered_map<std::string, Instrument> _instruments;
+    std::map<Instrument, OrderBook> _orderbooks;
+    PriorityQueue<Record, Record::ordering> _price_data;
 
-
+    void on_timer(Timestamp tp);
+    void reschedule();
 
 };
 

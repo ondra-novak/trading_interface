@@ -129,6 +129,7 @@ void MemoryStorage::TrnPutVar::operator ()(MemoryStorage* me) {
 
 void MemoryStorage::TrnPutOrder::operator ()(MemoryStorage* me) {
     auto bin = order.to_binary();
+    if (unused(bin)) return;
     me->_orders.emplace(std::move(bin.order_id), std::move(bin.order_content));
 }
 
