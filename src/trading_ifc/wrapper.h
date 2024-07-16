@@ -10,7 +10,7 @@ public:
 
     using NullT = typename T::Null;
 
-    static constexpr NullT null_instance;
+    static constexpr NullT null_instance = {};
     static std::shared_ptr<const T> null_instance_ptr;
 
 
