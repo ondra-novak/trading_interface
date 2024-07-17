@@ -204,10 +204,10 @@ public:
     Iterator upper_bound(const Key &key) const {
         return {_root, key, _less, true};
     }
-    Iterator begin() {
+    Iterator begin() const {
         return Iterator{_root};
     }
-    Iterator end() {
+    Iterator end() const {
         return Iterator{_root, _root};
     }
 

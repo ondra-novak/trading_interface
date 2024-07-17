@@ -5,29 +5,7 @@ WSStreams::WSStreams(IEvents &events, WebSocketContext &ctx, std::string url)
 {
 }
 
-WSStreams::AsyncResult WSStreams::subscribe_ticker(std::string_view symbol) {
-    return call("SUBSCRIBE", {to_id(symbol,"bookTicker"), to_id(symbol, "aggTrade")});
-}
-
-WSStreams::AsyncResult WSStreams::unsubscribe_ticker(std::string_view symbol) {
-    return call("UNSUBSCRIBE", {to_id(symbol,"bookTicker"), to_id(symbol, "aggTrade")});
-
-}
-
-WSStreams::AsyncResult WSStreams::subscribe_orderbook(std::string_view symbol) {
-    std::string id(symbol);
-    id.append("@depth");
-    return call("SUBSCRIBE", {to_id(symbol,"depth")});
-}
-
-WSStreams::AsyncResult WSStreams::unsubscribe_orderbook(
-        std::string_view symbol) {
-    std::string id(symbol);
-    id.append("@depth");
-    return call("UNSUBSCRIBE", {to_id(symbol,"depth")});
-}
-
-std::string WSStreams::to_id(std::string_view symbol, std::string_view type) {
+static std::string to_id(std::string_view symbol, std::string_view type) {
     std::string s;
     s.append(symbol);
     std::transform(s.begin(), s.end(), s.begin(), [](char c){return std::tolower(c);});
@@ -35,6 +13,46 @@ std::string WSStreams::to_id(std::string_view symbol, std::string_view type) {
     s.append(type);
     return s;
 }
+
+static json::value build_params(trading_api::SubscriptionType type, std::string_view symbol) {
+    switch (type) {
+        case trading_api::SubscriptionType::orderbook:
+            return {to_id(symbol,"depth")};
+        case trading_api::SubscriptionType::ticker:
+            return {to_id(symbol,"bookTicker"), to_id(symbol, "aggTrade")};
+        default:
+            throw std::runtime_error("unknown subscription type");
+    }
+}
+
+void WSStreams::subscribe(SubscriptionType type, std::string_view symbol) {    ;
+    subscribe(std::unique_lock(_mx),type, symbol);
+}
+void WSStreams::subscribe(std::unique_lock<std::mutex> &&lk,SubscriptionType type, std::string_view symbol) {
+    _subscrlist.insert(std::pair(type, std::string(symbol)));
+    auto id = call_lk("SUBSCRIBE", build_params(type, symbol));
+    attach_callback(lk, id, [this, type, symbol = std::string(symbol)](const Result &res) {
+        if (res.is_error) {
+            std::lock_guard _(_mx);
+            if (res.status != RPCClient::status_connection_lost) {
+                _subscrlist.erase(std::pair(type, symbol));
+            }
+        }
+        _events.subscribe_result(symbol, type, res);
+    });
+
+
+}
+void WSStreams::unsubscribe(SubscriptionType type, std::string_view symbol) {
+    unsubscribe(std::unique_lock(_mx),type, symbol);
+}
+void WSStreams::unsubscribe(std::unique_lock<std::mutex> &&lk,SubscriptionType type, std::string_view symbol) {
+    _subscrlist.erase(std::pair(type, std::string(symbol)));
+    auto id =call_lk("UNSUBSCRIBE", build_params(type, symbol));
+    attach_callback(lk, id, [](const Result &) {});
+
+}
+
 
 WSStreams::InstrumentState &WSStreams::get_instrument(const std::string_view id) {
         auto iter = _instrument_states.find(id);
@@ -101,6 +119,22 @@ bool WSStreams::on_json_message(const json::value& v) {
         return true;
     } else {
         return false;
+    }
+
+}
+
+void WSStreams::reconnect() {
+    reconnect(std::unique_lock(_mx));
+}
+
+
+void WSStreams::reconnect(std::unique_lock<std::mutex> &&lk) {
+    _instrument_states.clear();
+    auto lst = std::move(_subscrlist);
+    RPCClient::reconnect(std::move(lk));
+    lk.lock();
+    for (const auto &[type, symbol]: lst) {
+        subscribe(std::move(lk), type, symbol);
     }
 
 }

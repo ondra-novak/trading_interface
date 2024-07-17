@@ -147,6 +147,28 @@ public:
      */
     void close();
 
+    ///try to reconnect (closes current connection and connects target again)
+    void reconnect();
+
+
+    ///retrieve web sockets last error
+    std::string get_last_error() const;
+
+    ///sends ping request
+    /** when pong receives, it generates notification. You can check that pong
+     * was received by get_pong_counter()
+     *
+     * @retval current pong counter
+     */
+    int send_ping();
+
+    ///retrieves pong counter
+    /**
+     * everytime pong is received, counter is incremented
+     * @return current pong counter
+     */
+    int get_pong_counter();
+
 protected:
 
     using CallbackType = Function<void(Result), sizeof(Result)>;
@@ -156,17 +178,23 @@ protected:
 
 
     std::mutex _mx;
-    WebSocketClient _client;
+    std::string _url;
+    WebSocketContext &_ctx;
+    union {
+        WebSocketClient _client;
+    };
     ID _next_id = 1;
     PendingMap _pending;
     WebSocketClient::SendMessage _send_msg_cache;
     WebSocketClient::RecvMessage _recv_msg_cache;
 
-    void drop_all();
+    void drop_all(std::unique_lock<std::mutex> &&lk);
     static void create_request(WebSocketClient::SendMessage &msg,
             ID id, const std::string_view &method, const json::value &params);
 
     void attach_callback(ID id, CallbackType cb);
+    void attach_callback(std::unique_lock<std::mutex> &lk, ID id, CallbackType &cb);
+    void attach_callback(std::unique_lock<std::mutex> &lk, ID id, CallbackType &&cb);
     bool attach_coro(ID id, CoroHandle h);
     Result wait(ID id);
     Result get_no_wait(ID id);
@@ -178,4 +206,9 @@ protected:
      * @retval false not processed, continue in default processing
      */
     virtual bool on_json_message(const json::value &) {return false;}
+
+    void reconnect(std::unique_lock<std::mutex> &&lk);
+
+    ID call_lk(std::string_view method, json::value params);
+
 };

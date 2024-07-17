@@ -20,10 +20,18 @@ public:
                 if (!ev || !ev->on_writable()) return -1;
                 break;
             case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
-                if (ev) ev->on_error();
+                if (ev) {
+                    std::string_view msg;
+                    if (in != nullptr) msg = {reinterpret_cast<char*>(in), len};
+                    else msg = "generic IO error";
+                    ev->on_error(msg);
+                }
                 break;
             case LWS_CALLBACK_CLIENT_CLOSED:
                 if (ev) ev->on_closed();
+                break;
+            case LWS_CALLBACK_CLIENT_RECEIVE_PONG:
+                if (ev) ev->on_pong();
                 break;
 
             default:
@@ -126,17 +134,16 @@ bool WebSocketClient::send(std::string_view message, MsgType type) {
 
 bool WebSocketClient::send(SendMessage &msg) {
     std::lock_guard _(_mx);
-    if (_closing) return false;
+    if (_closed || _closing) return false;
     if (!send_lk(msg)) {
         msg = std::move(_send_prealloc);
     }
-    return true;
+    return !_closing;
 
 }
 
 
 bool WebSocketClient::send_lk(SendMessage &msg) {
-    handle_errors();
     if (_send_pending) {
         _send_queue.push_back(std::move(msg));
         return false;
@@ -163,8 +170,8 @@ void WebSocketClient::send_lk_2(SendMessage &msg) {
 
     int r = lws_write(_wsi,reinterpret_cast<unsigned char *>(msg.data()), msg.size(), protos[static_cast<int>(msg.get_type())]);
     if (r == -1) {
-        _send_error = true;
-        notify();
+        _closing = true;
+        _last_error = "lsw_write() failed";
     } else {
         _send_pending = true;
         lws_callback_on_writable(_wsi);
@@ -174,8 +181,14 @@ void WebSocketClient::send_lk_2(SendMessage &msg) {
 
 bool WebSocketClient::receive(RecvMessage &msg) {
     std::lock_guard _(_mx);
-    handle_errors();
-    if (_recv_queue.empty()) return false;
+    if (_recv_queue.empty()) {
+        if (_closed) {
+            msg.set_content(MsgType::close, {});
+            return true;
+        } else {
+            return false;
+        }
+    }
     if (msg.size() > _recv_prealloc.size()) {
         _recv_prealloc = std::move(msg);
     }
@@ -208,7 +221,8 @@ WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url) {
         use_ssl = false;
         url = url.substr(5);
     } else {
-        throw std::runtime_error("Unknown websocket protocol: "+ std::string(url));
+        WebSocketClient::on_error("Unknown websocket protocol: "+ std::string(url));
+        return ;
     }
 
     auto pddot = url.find(':');
@@ -219,7 +233,10 @@ WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url) {
     if (pddot < pathsep) {
         auto portstr = url.substr(pddot+1, pathsep-pddot-1);
         for (char c: portstr) {
-            if (!std::isdigit(c)) std::runtime_error("Invalid port: " + std::string(url));
+            if (!std::isdigit(c)) {
+                WebSocketClient::on_error("Invalid port: " + std::string(url));
+                return ;
+            }
             port = port * 10 + (c - '0');
         }
         addr_str =  url.substr(0, pddot);
@@ -245,20 +262,15 @@ WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url) {
     connect_info.pwsi = &_wsi;
     connect_info.userdata = this;
 
-    lws_client_connect_via_info(&connect_info);
+    auto x = lws_client_connect_via_info(&connect_info);
+    if (x == nullptr) {
+        _closed = true;
+        _connecting = false;
+        _last_error = "Connect failed:" + std::string(connect_info.address)+":"+std::to_string(connect_info.port);
+    }
 
 }
 
-void WebSocketClient::handle_errors() {
-    if (_send_error) {
-        throw std::runtime_error("WebSocket send error");
-        _send_error = false;
-    }
-    if (_recv_error) {
-        throw std::runtime_error("WebSocket receive error");
-        _recv_error = false;
-    }
-}
 
 void WebSocketClient::on_established() {
     std::lock_guard _(_mx);
@@ -270,18 +282,28 @@ void WebSocketClient::on_established() {
 
 void WebSocketClient::on_receive(std::string_view data) {
     std::lock_guard _(_mx);
-    MsgType type = lws_frame_is_binary(_wsi)?MsgType::binary:MsgType::text;
-    RecvMessage msg = std::move(_recv_prealloc);
-    msg.set_content(type, data);
-    _recv_queue.push_back(std::move(msg));
-    notify();
+    if (lws_is_first_fragment(_wsi)) {
+        MsgType type = lws_frame_is_binary(_wsi)?MsgType::binary:MsgType::text;
+        _recv_prealloc.set_content(type, data);
+    } else {
+        _recv_prealloc.insert(_recv_prealloc.end(), data.begin(), data.end());
+    }
+    if (lws_is_final_fragment(_wsi)) {
+        RecvMessage msg = std::move(_recv_prealloc);
+        _recv_queue.push_back(std::move(msg));
+        notify();
+    }
 }
 
-void WebSocketClient::on_error() {
+void WebSocketClient::on_error(std::string_view msg) {
     std::lock_guard _(_mx);
-    _recv_error = true;
     _closed = true;
-    notify();
+    _connecting = false;
+    _last_error = std::string(msg);
+    if (_send_el) _send_el->signal(_send_el_id);
+    if (_recv_el) _recv_el->signal(_recv_el_id);
+
+
 }
 
 std::size_t WebSocketClient::get_output_queue_size() const {
@@ -339,16 +361,20 @@ void WebSocketClient::on_receive(WSEventListener &pl, WSEventListener::ClientID 
 
 void WebSocketClient::on_send(WSEventListener &pl, WSEventListener::ClientID id) {
     std::lock_guard _(_mx);
-    _send_el = &pl;
-    _send_el_id = id;
+    if (_closed) {
+        pl.signal(id);
+    } else {
+        _send_el = &pl;
+        _send_el_id = id;
+        if (_wsi && !_connecting) lws_callback_on_writable(_wsi);
+    }
 }
 
-void WebSocketClient::push_close_frame() {
-    RecvMessage msg;
-    msg.set_content(MsgType::close, "");
-    _recv_queue.push_back(msg);
-    notify();
+std::string WebSocketClient::get_last_error() const {
+    std::lock_guard _(_mx);
+    return _last_error;
 }
+
 
 bool WebSocketClient::on_writable() {
     std::lock_guard _(_mx);
@@ -356,10 +382,16 @@ bool WebSocketClient::on_writable() {
     if (_closing) {
         _closed = true;
         lws_set_wsi_user(_wsi, nullptr);
-        push_close_frame();
+        notify();
         return false;
     }
-    if (!_send_queue.empty()) {
+    if (_send_ping) {
+        _send_pending = true;
+        _send_ping = false;
+        unsigned char buff[LWS_PRE];
+        lws_write(_wsi, buff, 0, LWS_WRITE_PING);
+        lws_callback_on_writable(_wsi);
+    } else if (!_send_queue.empty()) {
         SendMessage msg = _send_queue.front();
         _send_queue.pop_front();
         send_lk_2(msg);
@@ -403,10 +435,28 @@ void WebSocketClient::close() {
 void WebSocketClient::on_closed() {
     std::lock_guard _(_mx);
     _closed = true;
-    push_close_frame();
+    notify();
 }
 
+int WebSocketClient::get_pong_counter() {
+    std::lock_guard _(_mx);
+    return _pong_counter;
+}
 
+void WebSocketClient::on_pong() {
+    std::lock_guard _(_mx);
+    ++_pong_counter;
+    notify();
+}
+
+int WebSocketClient::send_ping() {
+    std::lock_guard _(_mx);
+    if (!_closed && !_closing) {
+        _send_ping = true;
+        lws_callback_on_writable(_wsi);
+    }
+    return _pong_counter;
+}
 /*
 int main() {
 

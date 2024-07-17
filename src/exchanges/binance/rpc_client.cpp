@@ -1,12 +1,13 @@
 #include "rpc_client.h"
 
 RPCClient::RPCClient(WebSocketContext &ctx, std::string url)
-    :_client(ctx, url)
+    :_url(std::move(url)), _ctx(ctx), _client(_ctx, _url)
 {
 }
 
 RPCClient::~RPCClient() {
-    drop_all();
+    drop_all(std::unique_lock(_mx));
+    std::destroy_at(&_client);
 }
 
 void RPCClient::close() {
@@ -21,18 +22,18 @@ void RPCClient::clear_on_clear_to_send() {
     _client.clear_on_send();
 }
 
-void RPCClient::drop_all() {
-    for (auto &[k, v]: _pending) {
+void RPCClient::drop_all(std::unique_lock<std::mutex> &&lk) {
+    auto pm = std::move(_pending);
+    lk.unlock();
+    for (auto &[k, v]: pm) {
         if (std::holds_alternative<CallbackType>(v)) {
             CallbackType &cb = std::get<CallbackType>(v);
             cb(Result{true, status_connection_lost, {}});
         } else if (std::holds_alternative<CoroHandle>(v)) {
             CoroHandle h = std::get<CoroHandle>(v);
-            v.template emplace<Result>(Result{true, status_connection_lost, {}});
-            h.resume();
+            h.resume(); //get_no_wait returns error as the id doesn't exists
         }
     }
-    _pending.clear();
 }
 
 void RPCClient::create_request(WebSocketClient::SendMessage &msg,
@@ -54,6 +55,18 @@ void RPCClient::create_request(WebSocketClient::SendMessage &msg,
 
 RPCClient::AsyncResult RPCClient::call(std::string_view method, json::value params) {
     std::lock_guard _(_mx);
+    return AsyncResult(*this, call_lk(method, params));
+}
+
+int RPCClient::send_ping() {
+    return _client.send_ping();
+}
+
+int RPCClient::get_pong_counter() {
+    return _client.get_pong_counter();
+}
+
+RPCClient::ID RPCClient::call_lk(std::string_view method, json::value params) {
     ID id = _next_id++;
     create_request(_send_msg_cache, id, method, params);
     if (!_client.send(_send_msg_cache)) {
@@ -61,7 +74,7 @@ RPCClient::AsyncResult RPCClient::call(std::string_view method, json::value para
     } else {
         _pending.emplace(id, std::monostate{});
     }
-    return AsyncResult(*this, id);
+    return id;
 }
 
 RPCClient::AsyncResult RPCClient::operator ()(std::string_view method, json::value params) {
@@ -79,7 +92,7 @@ void RPCClient::on_clear_to_send(WSEventListener &listener, WSEventListener::Cli
 bool RPCClient::process_responses() {
     while (_client.receive(_recv_msg_cache)) {
         if (_recv_msg_cache.is_close()) {
-            drop_all();
+            drop_all(std::unique_lock(_mx));
             return false;
         }
 
@@ -124,9 +137,18 @@ bool RPCClient::process_responses() {
 
 }
 
+std::string RPCClient::get_last_error() const {
+    return _client.get_last_error();
+}
 
 void RPCClient::attach_callback(ID id, CallbackType cb) {
     std::unique_lock lk(_mx);
+    attach_callback(lk, id, cb);
+}
+void RPCClient::attach_callback(std::unique_lock<std::mutex> &lk, ID id, CallbackType &&cb) {
+    attach_callback(lk, id, cb);
+}
+void RPCClient::attach_callback(std::unique_lock<std::mutex> &lk, ID id, CallbackType &cb) {
     auto iter = _pending.find(id);
     if (iter == _pending.end()) {
         return;
@@ -163,7 +185,7 @@ RPCClient::Result RPCClient::wait(ID id) {
 RPCClient::Result RPCClient::get_no_wait(ID id) {
     std::unique_lock lk(_mx);
     auto iter = _pending.find(id);
-    if (iter == _pending.end()) throw std::logic_error("n/a");
+    if (iter == _pending.end()) return Result{true,status_connection_lost, {}};
     return std::get<Result>(iter->second);
 }
 
@@ -186,4 +208,15 @@ bool RPCClient::is_ready(ID id) {
     std::unique_lock lk(_mx);
     auto iter = _pending.find(id);
     return iter == _pending.end() || std::holds_alternative<Result>(iter->second);
+}
+
+
+void RPCClient::reconnect()  {
+    reconnect(std::unique_lock(_mx));
+}
+
+void RPCClient::reconnect(std::unique_lock<std::mutex> &&lk) {
+    std::destroy_at(&_client);
+    std::construct_at<WebSocketClient>(&_client, _ctx, _url);
+    drop_all(std::move(lk));
 }

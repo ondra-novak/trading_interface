@@ -105,6 +105,46 @@ public:
         return _tp;
     }
 
+
+
+    friend std::ostream &operator<<(std::ostream &s, const OrderBook &ob) {
+        auto iter_bid = ob._bid_side.begin();
+        auto iter_ask = ob._ask_side.begin();
+        double bid_lev[8], bid_amn[8];
+        int bid_cnt = 0;
+        while (iter_bid != ob._bid_side.end() && bid_cnt < 8) {
+            bid_lev[bid_cnt] = iter_bid->first;
+            bid_amn[bid_cnt] = iter_bid->second;
+            ++bid_cnt;
+            ++iter_bid;
+        }
+        int cnt = bid_cnt;
+        while (iter_bid != ob._bid_side.end()) {
+            ++iter_bid;
+            ++bid_cnt;
+        }
+        s<<'(' << bid_cnt << ')';
+        while (cnt > 0) {
+            --cnt;
+            s << bid_amn[cnt] << "@" << bid_lev[cnt];
+            if (cnt) s << ", ";
+        }
+        s << "---";
+        int ask_cnt = 0;
+        while (iter_ask != ob._ask_side.end() && ask_cnt < 8) {
+            if (ask_cnt) s<<", ";
+            s << iter_ask->second << "@" << iter_ask->first;
+            ++ask_cnt;
+            ++iter_ask;
+        }
+        while (iter_ask != ob._ask_side.end()) {
+            ++iter_ask;
+            ++ask_cnt;
+        }
+        s << '(' << ask_cnt << ')';
+        return s;
+    }
+
 protected:
 
 

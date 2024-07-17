@@ -37,10 +37,12 @@ public:
     class Events {
     public:
         virtual void on_established() = 0;
-        virtual void on_error() = 0;
+        virtual void on_error(std::string_view error_msg) = 0;
         virtual void on_closed() = 0;
         virtual void on_receive(std::string_view data) = 0;
         virtual bool on_writable() = 0;
+        virtual void on_pong() = 0;
+        virtual ~Events() = default;
     };
 
 
@@ -388,27 +390,47 @@ public:
     std::size_t get_input_queue_size_bytes() const;
 
 
+    ///when connection is closed, you can check whether there were an error
+    /**
+     * @return non-empty - error message, empty - probably closed by peer
+     */
+    std::string get_last_error() const;
+
+    ///sends ping request
+    /** when pong receives, it generates notification. You can check that pong
+     * was received by get_pong_counter()
+     *
+     * @retval current pong counter
+     */
+    int send_ping();
+
+    ///retrieves pong counter
+    /**
+     * everytime pong is received, counter is incremented
+     * @return current pong counter
+     */
+    int get_pong_counter();
 
 protected:
 
 
     mutable std::mutex _mx;
-    struct lws *_wsi;  //< connection handle
+    struct lws *_wsi = nullptr;  //< connection handle
     std::deque<SendMessage> _send_queue; //queue of messages to send
     std::deque<RecvMessage> _recv_queue; //queue of messages received
     SendMessage _send_prealloc;   //preallocated send buffer
     RecvMessage _recv_prealloc;   //preallocated receive buffer
     bool _connecting = true;    //< sets to true when connection is established
     bool _send_pending = true;  //< true - finishing send, false - nothing to send
-    bool _send_error = false;   //< previous send reported an error
-    bool _recv_error = false;   //< receive reported an erro
     bool _closing = false;      //< close() issued
     bool _closed = false;       //< connection is closed
+    std::string _last_error;
     WSEventListener *_recv_el = nullptr; //< receive event listener
     WSEventListener *_send_el = nullptr; //< send event listener
     WSEventListener::ClientID _recv_el_id = 0; //< receive event listener client id
     WSEventListener::ClientID _send_el_id = 0; //< send event listener client id
-
+    bool _send_ping = false;
+    int _pong_counter = 0;
 
     //internal send message (locked - check for pending flags)
     bool send_lk(SendMessage &msg);
@@ -416,21 +438,19 @@ protected:
     void send_lk_2(SendMessage &msg);
     //notify about income data or information
     void notify();
-    //handle errors
-    void handle_errors();
 
     //event - connection established
     virtual void on_established() override;
     //event - received data
     virtual void on_receive(std::string_view data) override;
     //event - error
-    virtual void on_error() override;
+    virtual void on_error(std::string_view msg) override;
     //event - ready to send
     virtual bool on_writable() override;
     //event - closed
     virtual void on_closed() override;
-    //generates close frame and pushes it to receive queue
-    void push_close_frame();
+    //event - closed
+    virtual void on_pong() override;
 
 };
 
