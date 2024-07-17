@@ -17,6 +17,10 @@ void RPCClient::clear_on_response() {
     _client.clear_on_receive();
 }
 
+void RPCClient::clear_on_clear_to_send() {
+    _client.clear_on_send();
+}
+
 void RPCClient::drop_all() {
     for (auto &[k, v]: _pending) {
         if (std::holds_alternative<CallbackType>(v)) {
@@ -68,8 +72,12 @@ void RPCClient::on_response(WSEventListener &listener, WSEventListener::ClientID
     _client.on_receive(listener, id);
 }
 
+void RPCClient::on_clear_to_send(WSEventListener &listener, WSEventListener::ClientID id) {
+    _client.on_send(listener, id);
+}
+
 bool RPCClient::process_responses() {
-    while (!_client.receive(_recv_msg_cache)) {
+    while (_client.receive(_recv_msg_cache)) {
         if (_recv_msg_cache.is_close()) {
             drop_all();
             return false;

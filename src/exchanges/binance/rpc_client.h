@@ -131,6 +131,10 @@ public:
     ///Clear "on_response" listener
     void clear_on_response();
     ///Process responses
+    void on_clear_to_send(WSEventListener &listener, WSEventListener::ClientID id);
+    ///Clear "on_response" listener
+    void clear_on_clear_to_send();
+    ///Process responses
     /**
      * Processes all pending responses, resumes all awaiting coroutines, etc
      * @retval true processed ok

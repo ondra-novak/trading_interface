@@ -44,6 +44,23 @@ public:
         }
     }
 
+    void trim(double lowest_price, double highest_price) {
+        {
+            auto iter = _bid_side.upper_bound(lowest_price);
+            while (iter != _bid_side.end()) {
+                _bid_side.erase(iter->first);
+                iter = _bid_side.upper_bound(lowest_price);
+            }
+        }
+        {
+            auto iter = _ask_side.upper_bound(highest_price);
+            while (iter != _ask_side.end()) {
+                _ask_side.erase(iter->first);
+                iter = _ask_side.upper_bound(highest_price);
+            }
+        }
+    }
+
     void remove_bid_to(double price) {
         while (_bid_side.begin()->first > price) {
             _bid_side.erase(_bid_side.begin()->first);
@@ -80,6 +97,14 @@ public:
         update_bid(tk.bid, tk.bid_volume);
     }
 
+    void set_timestamp(const Timestamp &tp) {
+        _tp = tp;
+    }
+
+    Timestamp get_timestamp() const {
+        return _tp;
+    }
+
 protected:
 
 
@@ -90,8 +115,9 @@ protected:
         bool operator()(double a, double b) const {return a < b;}
     };
 
-    WanderingTree<double, double, CmpBid> _bid_side;
-    WanderingTree<double, double, CmpAsk> _ask_side;
+    Timestamp _tp; //<snapshot time
+    WanderingTree<double, double, CmpBid> _bid_side;    //<bid side
+    WanderingTree<double, double, CmpAsk> _ask_side;    //<ask side
 };
 
 

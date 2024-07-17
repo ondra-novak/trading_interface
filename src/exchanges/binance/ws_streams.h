@@ -11,8 +11,8 @@ public:
     class IEvents {
     public:
 
-        virtual void on_ticker(std::string_view symbol, trading_api::Timestamp timestamp, const trading_api::Ticker &ticker) = 0;
-        virtual void on_orderbook(std::string_view symbol, trading_api::Timestamp timestamp, const trading_api::OrderBook::Update &update) = 0;
+        virtual void on_ticker(std::string_view symbol,  const trading_api::Ticker &ticker) = 0;
+        virtual void on_orderbook(std::string_view symbol,  const trading_api::OrderBook &update) = 0;
         virtual ~IEvents() = default;
     };
 
@@ -36,6 +36,15 @@ protected:
     using RPCClient::call;
     using RPCClient::operator();
 
+    struct InstrumentState {
+        trading_api::Ticker ticker = {};
+        trading_api::OrderBook orderbook = {};
+    };
+
+    std::map<std::string, InstrumentState, std::less<> > _instrument_states;
+
     static std::string to_id(std::string_view symbol, std::string_view type);
+    
+    InstrumentState &get_instrument(const std::string_view id);
 
 };

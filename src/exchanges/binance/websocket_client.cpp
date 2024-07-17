@@ -38,7 +38,7 @@ public:
 WebSocketContext::WebSocketContext() {
     lws_context_creation_info context_info = {};
     lws_protocols protocols[2] = {
-            {"echo",&WebSocketContext::Callback::callback, 0, 0, 0, nullptr, 0},
+            {"",&WebSocketContext::Callback::callback, 0, 0, 0, nullptr, 0},
             {nullptr, nullptr, 0, 0,0,  nullptr, 0}
     };
     context_info.port = CONTEXT_PORT_NO_LISTEN;
@@ -180,7 +180,7 @@ bool WebSocketClient::receive(RecvMessage &msg) {
         _recv_prealloc = std::move(msg);
     }
     msg = std::move(_recv_queue.front());
-    _recv_queue.pop_back();
+    _recv_queue.pop_front();
     return true;
 }
 
@@ -240,8 +240,8 @@ WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url) {
     connect_info.ssl_connection = use_ssl?LCCSCF_USE_SSL: 0;
     connect_info.path = cpath.c_str();
     connect_info.host = connect_info.address;
-    connect_info.origin = connect_info.address;
-    connect_info.protocol = "echo";
+//    connect_info.origin = connect_info.address;
+    connect_info.protocol = nullptr;
     connect_info.pwsi = &_wsi;
     connect_info.userdata = this;
 
@@ -265,7 +265,7 @@ void WebSocketClient::on_established() {
     lws_callback_on_writable(_wsi);
     _send_pending = false;
     _connecting = false;
-    notify();
+    if (_send_el) _send_el->signal(_send_el_id);
 }
 
 void WebSocketClient::on_receive(std::string_view data) {
