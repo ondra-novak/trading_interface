@@ -3,6 +3,7 @@
 WSStreams::WSStreams(IEvents &events, WebSocketContext &ctx, std::string url)
 :RPCClient(ctx, std::move(url)),_events(events)
 {
+    _subclass_cb = [this](const auto &x){return on_json_message(x);};
 }
 
 static std::string to_id(std::string_view symbol, std::string_view type) {

@@ -33,7 +33,7 @@ public:
 protected:
     IEvents &_events;
 
-    virtual bool on_json_message(const json::value&) override;
+    bool on_json_message(const json::value&);
 
     using RPCClient::call;
     using RPCClient::operator();

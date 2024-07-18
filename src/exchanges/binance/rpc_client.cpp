@@ -6,11 +6,15 @@ RPCClient::RPCClient(WebSocketContext &ctx, std::string url)
 }
 
 RPCClient::~RPCClient() {
-    drop_all(std::unique_lock(_mx));
+    std::unique_lock lk(_mx);
+    _explicit_close = true;
+    drop_all(std::move(lk));
     std::destroy_at(&_client);
 }
 
 void RPCClient::close() {
+    std::lock_guard _(_mx);
+    _explicit_close = true;
     _client.close();
 }
 
@@ -97,7 +101,7 @@ bool RPCClient::process_responses() {
         }
 
         json::value data = json::value::from_json(_recv_msg_cache);
-        if (on_json_message(data)) continue;
+        if (_subclass_cb && _subclass_cb(data)) continue;
         Result res;
         res.is_error = data["error"].defined();
         if (res.is_error) {
@@ -219,4 +223,9 @@ void RPCClient::reconnect(std::unique_lock<std::mutex> &&lk) {
     std::destroy_at(&_client);
     std::construct_at<WebSocketClient>(&_client, _ctx, _url);
     drop_all(std::move(lk));
+}
+
+bool RPCClient::is_explicit_close() const {
+    std::lock_guard lk(_mx);
+    return _explicit_close;
 }

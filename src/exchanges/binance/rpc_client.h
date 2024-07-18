@@ -169,6 +169,16 @@ public:
      */
     int get_pong_counter();
 
+
+    class IThreadMonitor {
+    public:
+        virtual void on_reconnect(std::string reason) = 0;
+        virtual void on_ping() = 0;
+    };
+
+    template<std::derived_from<RPCClient> T>
+    static void run_thread_auto_reconnect(T &x, unsigned int ping_interval = 30, IThreadMonitor *mon = nullptr);
+
 protected:
 
     using CallbackType = Function<void(Result), sizeof(Result)>;
@@ -177,7 +187,7 @@ protected:
     using PendingMap = std::map<ID, PendingRequest>;
 
 
-    std::mutex _mx;
+    mutable std::mutex _mx;
     std::string _url;
     WebSocketContext &_ctx;
     union {
@@ -187,6 +197,9 @@ protected:
     PendingMap _pending;
     WebSocketClient::SendMessage _send_msg_cache;
     WebSocketClient::RecvMessage _recv_msg_cache;
+    std::function<bool(const json::value &)> _subclass_cb;
+    std::unique_ptr<std::jthread> _thr;
+    bool _explicit_close = false;
 
     void drop_all(std::unique_lock<std::mutex> &&lk);
     static void create_request(WebSocketClient::SendMessage &msg,
@@ -199,16 +212,45 @@ protected:
     Result wait(ID id);
     Result get_no_wait(ID id);
     bool is_ready(ID id);
-    ///called before json message is processed
-    /**
-     * @param message
-     * @retval true processed, no futher process
-     * @retval false not processed, continue in default processing
-     */
-    virtual bool on_json_message(const json::value &) {return false;}
+
 
     void reconnect(std::unique_lock<std::mutex> &&lk);
 
     ID call_lk(std::string_view method, json::value params);
 
+    bool is_explicit_close() const;
 };
+
+template<std::derived_from<RPCClient> T>
+inline void RPCClient::run_thread_auto_reconnect(T &inst, unsigned int ping_interval, IThreadMonitor *mon) {
+    inst._thr = std::make_unique<std::jthread>([&inst, ping_interval, mon](std::stop_token stop){
+     while (!stop.stop_requested()) {
+        auto reconnect_after = std::chrono::system_clock::now()+std::chrono::seconds(5);
+        WSEventListener lsn;
+        inst.on_response(lsn, 0);
+        std::stop_callback __cb(stop,[&]{
+            lsn.signal(1);
+        });
+        bool try_ping = true;
+        while (!stop.stop_requested() && inst.process_responses()) {
+            if (!lsn.wait_for(std::chrono::seconds(ping_interval))) {
+                if (try_ping) {
+                    inst.send_ping();
+                    try_ping = false;
+                    if (mon) mon->on_ping();
+                } else {
+                    break;
+                }
+            }
+            else {
+                try_ping = true;
+            }
+        }
+        if (stop.stop_requested()) break;
+        if (mon) mon->on_reconnect(inst.get_last_error());
+        std::this_thread::sleep_until(reconnect_after);
+        if (stop.stop_requested()) break;
+        inst.reconnect();
+    }
+    });
+}

@@ -49,7 +49,7 @@ int main() {
     WSEventListener lsn;
 
     WSStreams stream(pev,ctx,"wss://fstream.binance.com/ws");
-    stream.subscribe(trading_api::SubscriptionType::ticker,"BTCUSDT");
+    stream.subscribe(trading_api::SubscriptionType::orderbook,"BTCUSDT");
     std::thread thr(read_thread, &stream);
     std::cout << std::cin.get();
     stopped = true;
