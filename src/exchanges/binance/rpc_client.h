@@ -127,13 +127,13 @@ public:
      * @param listener listener instance
      * @param id assigned client id
      */
-    void on_response(WSEventListener &listener, WSEventListener::ClientID id);
+    void notify_data_available(WSEventListener &listener, WSEventListener::ClientID id);
     ///Clear "on_response" listener
-    void clear_on_response();
+    void disable_data_available_notification();
     ///Process responses
-    void on_clear_to_send(WSEventListener &listener, WSEventListener::ClientID id);
+    void notify_clear_to_send(WSEventListener &listener, WSEventListener::ClientID id);
     ///Clear "on_response" listener
-    void clear_on_clear_to_send();
+    void disable_clear_to_send_notification();
     ///Process responses
     /**
      * Processes all pending responses, resumes all awaiting coroutines, etc
@@ -176,6 +176,13 @@ public:
         virtual void on_ping() = 0;
     };
 
+    ///Runs a thread to drive RPC Client (or any derived class)
+    /**
+     * @param x reference to RPCClient (or derived class)
+     * @param ping_interval shortest ping interval. Reconnect interval is calculated
+     * as ping_interval * 2
+     * @param mon monitoring object, optional
+     */
     template<std::derived_from<RPCClient> T>
     static void run_thread_auto_reconnect(T &x, unsigned int ping_interval = 30, IThreadMonitor *mon = nullptr);
 
@@ -227,7 +234,7 @@ inline void RPCClient::run_thread_auto_reconnect(T &inst, unsigned int ping_inte
      while (!stop.stop_requested()) {
         auto reconnect_after = std::chrono::system_clock::now()+std::chrono::seconds(5);
         WSEventListener lsn;
-        inst.on_response(lsn, 0);
+        inst.notify_data_available(lsn, 0);
         std::stop_callback __cb(stop,[&]{
             lsn.signal(1);
         });
@@ -253,4 +260,5 @@ inline void RPCClient::run_thread_auto_reconnect(T &inst, unsigned int ping_inte
         inst.reconnect();
     }
     });
+    inst.disable_data_available_notification();
 }

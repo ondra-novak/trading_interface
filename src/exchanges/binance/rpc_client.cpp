@@ -18,12 +18,12 @@ void RPCClient::close() {
     _client.close();
 }
 
-void RPCClient::clear_on_response() {
-    _client.clear_on_receive();
+void RPCClient::disable_data_available_notification() {
+    _client.disable_data_available_notification();
 }
 
-void RPCClient::clear_on_clear_to_send() {
-    _client.clear_on_send();
+void RPCClient::disable_clear_to_send_notification() {
+    _client.disable_clear_to_send_notification();
 }
 
 void RPCClient::drop_all(std::unique_lock<std::mutex> &&lk) {
@@ -85,12 +85,12 @@ RPCClient::AsyncResult RPCClient::operator ()(std::string_view method, json::val
     return call(method, std::move(params));
 }
 
-void RPCClient::on_response(WSEventListener &listener, WSEventListener::ClientID id) {
-    _client.on_receive(listener, id);
+void RPCClient::notify_data_available(WSEventListener &listener, WSEventListener::ClientID id) {
+    _client.notify_data_available(listener, id);
 }
 
-void RPCClient::on_clear_to_send(WSEventListener &listener, WSEventListener::ClientID id) {
-    _client.on_send(listener, id);
+void RPCClient::notify_clear_to_send(WSEventListener &listener, WSEventListener::ClientID id) {
+    _client.notify_clear_to_send(listener, id);
 }
 
 bool RPCClient::process_responses() {

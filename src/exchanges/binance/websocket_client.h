@@ -33,6 +33,14 @@ public:
     ///retrieve lws context handle
     struct lws_context *get_context() const {return context.get();}
 
+
+    class HeaderEmit {
+    public:
+        virtual void operator()(const char *name, std::string_view value) const = 0;
+        virtual ~HeaderEmit() = default;
+    };
+
+
     ///events available for clients
     class Events {
     public:
@@ -42,7 +50,13 @@ public:
         virtual void on_receive(std::string_view data) = 0;
         virtual bool on_writable() = 0;
         virtual void on_pong() = 0;
+        virtual void on_add_custom_headers(const HeaderEmit &emit) = 0;
         virtual ~Events() = default;
+    };
+
+    class HttpEvents: public Events {
+        virtual void on_http_established() = 0;
+        virtual void on_http_close() = 0;
     };
 
 
@@ -239,12 +253,14 @@ public:
 
     };
 
+    using CustomHeaders = std::vector<std::pair<std::string, std::string>  >;
+
     ///initialize client
     /**
      * @param ctx context
      * @param url url in form wss://...
      */
-    WebSocketClient(WebSocketContext &ctx, std::string_view url);
+    WebSocketClient(WebSocketContext &ctx, std::string_view url, std::string_view protocol = {}, CustomHeaders hdrs = {});
     ///destroy client
     /**
      * @note operation is synchronous and cause blocking. It requires to
@@ -311,7 +327,7 @@ public:
     bool receive(RecvMessage &msg);
 
 
-    ///Register WSEventListener
+    ///Notifies the provided WSEventListener when data is available to read.
     /**
      * @param pl instance of event listened
      * @param id id of this client (will be identified on the poller)
@@ -319,30 +335,46 @@ public:
      * @note you can register only one WSEventListener instance. Multiple attemps
      * replaces each by other
      */
-    void on_receive(WSEventListener &pl, WSEventListener::ClientID id);
+    void notify_data_available(WSEventListener &pl, WSEventListener::ClientID id);
 
-    ///clear up any registered event listener
+    ///Disables the notification for when data is available to read.
     /**
-     * Don't forget to clear before WSEventListener is destroyed
+     * You need to call this function before instance of WSEventListener is destroyed
      */
-    void clear_on_receive();
+    void disable_data_available_notification();
 
-    ///Register poller which signals everytime the output queue is consumed by one item
+    ///Register WSEventListener for notification sent when object is ready to
+    /// send a message
     /**
-     * This can be useful to control size of the output queue and for example
-     * to slow down sending.
+     * Notifies the provided WSEventListener when the object is ready to send more data.
+     * This notification is triggered when at least one message queued for sending is successfully sent,
+     * thus freeing up space for a new message. This can help to slow down sending when
+     * generating messages is faster than network speed
      *
-     * @param pl poller
-     * @param id identifier of the client in mask
+     *
+     * @param pl instance of event listener
+     * @param id id of this client on event listener
+     *
+     * @code
+     *  //limit output queue to max 10 messages
+     * WSEventListener lst;
+     * wsc.notify_clear_to_send(lst,1);
+     * while (wsc.get_output_queue_size()>9) {
+     *      lst.wait();
+     * }
+     * wsc.disable_clear_to_send_notification();
+     * wsc.send(message);
+     * @endcode
+     *
      */
 
-    void on_send(WSEventListener &pl, WSEventListener::ClientID id);
+    void notify_clear_to_send(WSEventListener &pl, WSEventListener::ClientID id);
 
     ///clear up any registered event listener
     /**
      * Don't forget to clear before WSEventListener is destroyed
      */
-    void clear_on_send();
+    void disable_clear_to_send_notification();
 
     ///Receive message synchronously
     /**
@@ -413,8 +445,15 @@ public:
 
 protected:
 
+    WebSocketClient(WebSocketContext &ctx,
+            std::string_view &&url,
+            std::string_view &&protocol,
+            CustomHeaders &&hdrs,
+            const char *force_HTTP_method);
+
 
     mutable std::mutex _mx;
+    CustomHeaders _headers;
     struct lws *_wsi = nullptr;  //< connection handle
     std::deque<SendMessage> _send_queue; //queue of messages to send
     std::deque<RecvMessage> _recv_queue; //queue of messages received
@@ -436,8 +475,6 @@ protected:
     bool send_lk(SendMessage &msg);
     //internal second phase of send message (locked - pending flag is false)
     void send_lk_2(SendMessage &msg);
-    //notify about income data or information
-    void notify();
 
     //event - connection established
     virtual void on_established() override;
@@ -451,6 +488,9 @@ protected:
     virtual void on_closed() override;
     //event - closed
     virtual void on_pong() override;
+
+    virtual void on_add_custom_headers(const WebSocketContext::HeaderEmit &ctx) override;
+
 
 };
 
@@ -476,3 +516,89 @@ inline bool WebSocketClient::send(std::size_t sz, Fn &&fn, MsgType type) {
     if (send_lk(msg)) _send_prealloc = std::move(msg);
     return true;
 }
+
+enum class HttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE
+};
+
+
+
+///Simplified HTTP client, just 1 HTTP request
+class HttpClientRequest: protected WebSocketContext::Events{
+public:
+
+
+    using CustomHeaders = WebSocketClient::CustomHeaders;
+
+    ///construct generic HTTP request - for all non-GET requests
+    /**
+     * @param ctx context
+     * @param method method
+     * @param url url
+     * @param body body content
+     * @param hdrs custom headers
+     */
+    HttpClientRequest(WebSocketContext &ctx, HttpMethod method, std::string_view url, std::string_view body, CustomHeaders hdrs = {});
+    ///construct GET request
+    /**
+     * @param ctx context
+     * @param url url
+     * @param hdrs custom headers
+     */
+    HttpClientRequest(WebSocketContext &ctx, std::string_view url, CustomHeaders hdrs = {});
+
+    using Data = std::vector<char>;
+
+    ///receives data
+    /**
+     * @param data contains read data
+     * @retval true data retrieved
+     * @retval false no data ready yet
+     *
+     * @note if data is empty(), EOF reached
+     *
+     * @note current buffer is swap in, so it can benefit from reusing preallocated space
+     *
+     */
+    bool read_body(Data &data);
+
+    ///receives data synchronously
+    /**
+     * @param data reference to buffer
+     * @retval true read
+     * @retval false EOF
+     */
+    bool read_body_sync(Data &data);
+
+    ///enable notification about incoming data
+    void notify_data_available(WSEventListener &evl, WSEventListener::ClientID id);
+    ///disable notification
+    void disable_data_available_notification();
+
+protected:
+    CustomHeaders _headers;
+    struct lws *_wsi = nullptr;  //< connection handle
+    Data _response = {};
+    std::mutex _mx;
+    WSEventListener *_recv_el = nullptr;
+    WSEventListener::ClientID _recv_el_id = 0;
+    bool _finished = false;
+    std::string _last_error;
+    std::vector<char> _request_body;
+    bool _expect_body = false;
+
+    virtual void on_pong() override;
+    virtual void on_established() override;
+    virtual void on_error(std::string_view error_msg) override;
+    virtual void on_receive(std::string_view data) override;
+    virtual void on_add_custom_headers(const WebSocketContext::HeaderEmit &emit) override;
+    virtual bool on_writable() override;
+    virtual void on_closed() override;
+
+
+
+};
+

@@ -9,8 +9,14 @@ public:
         void operator ()(EVP_PKEY *);
     };
 
+    ///contains autorization keys to an account
     struct Account {
 
+        ///constructor
+        /**
+         * @param api_key api key identifier
+         * @param secret PEM format of private key
+         */
         Account(std::string api_key, std::string secret);
 
         std::string _api_key_name;
@@ -22,7 +28,21 @@ public:
 
     using RPCClient::operator();
     using RPCClient::call;
+    ///perform signed RPC call
+    /**
+     * @param acc account
+     * @param method method
+     * @param params params
+     * @return asynchronous result
+     */
     AsyncResult operator()(const Account &acc, std::string_view method, json::value params);
+    ///perform signed RPC call
+    /**
+     * @param acc account
+     * @param method method
+     * @param params params
+     * @return asynchronous result
+     */
     AsyncResult call(const Account &acc,std::string_view method, json::value params);
 
 

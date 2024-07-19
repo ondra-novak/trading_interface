@@ -14,33 +14,6 @@ public:
 
 };
 
-std::atomic<bool> stopped = false;
-void read_thread(WSStreams *strm) {
-    while (!stopped) {
-        auto reconnect_after = std::chrono::system_clock::now()+std::chrono::seconds(5);
-        WSEventListener lsn;
-        strm->on_response(lsn, 0);
-        bool try_ping = true;
-        while (strm->process_responses()) {
-            if (!lsn.wait_for(std::chrono::seconds(10))) {
-                if (try_ping) {
-                    strm->send_ping();
-                    try_ping = false;
-                } else {
-                    break;
-                }
-            }
-            else {
-                try_ping = true;
-            }
-        }
-        if (stopped) break;
-        std::cerr<<"WS Error:" << strm->get_last_error() << std::endl;
-        std::this_thread::sleep_until(reconnect_after);
-        if (stopped) break;
-        strm->reconnect();
-    }
-}
 
 
 int main() {
@@ -50,10 +23,8 @@ int main() {
 
     WSStreams stream(pev,ctx,"wss://fstream.binance.com/ws");
     stream.subscribe(trading_api::SubscriptionType::orderbook,"BTCUSDT");
-    std::thread thr(read_thread, &stream);
+    stream.run_thread_auto_reconnect(stream, 10, nullptr);
     std::cout << std::cin.get();
-    stopped = true;
     stream.close();
-    thr.join();
     return 0;
 }
