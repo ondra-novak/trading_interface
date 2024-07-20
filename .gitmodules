@@ -1,3 +1,8 @@
 [submodule "src/libs/json20"]
 	path = src/libs/json20
 	url = https://github.com/ondra-novak/json20.git
+    shallow = true
+[submodule "src/libs/yaml"]
+	path = src/libs/yaml
+	url = https://github.com/jbeder/yaml-cpp.git
+    shallow = true

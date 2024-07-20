@@ -7,10 +7,12 @@ set(testFiles
 	loader.cpp
 	config_desc.cpp
 	wandering_bst.cpp
+	yaml.cpp
 )
 
 link_libraries(
      trading_api_common
+     yaml-cpp
 	${STANDARD_LIBRARIES}
 )
 
