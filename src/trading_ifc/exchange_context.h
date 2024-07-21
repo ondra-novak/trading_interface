@@ -4,6 +4,7 @@
 #include "order.h"
 #include "fill.h"
 
+#include "log.h"
 namespace trading_api {
 
 class IEvantTarget;
@@ -56,6 +57,12 @@ public:
      */
     virtual void order_restore(void *context, const Order &order) = 0;
 
+
+    ///Convert this object to exchange
+    virtual Exchange get_exchange() const = 0;
+
+    virtual Log get_log() const = 0;
+
     class Null;
 
 };
@@ -70,6 +77,8 @@ public:
     virtual void object_updated(const Account &) override{throw_error();}
     virtual void object_updated(const Instrument &) override{throw_error();}
     virtual void income_data(const Instrument &, const Ticker &) override{throw_error();}
+    virtual Log get_log() const override {throw_error();}
+    virtual Exchange get_exchange() const override {throw_error();}
 };
 
 class ExchangeContext {
@@ -143,6 +152,16 @@ public:
     void order_restore(void *context, const Order &order) {
         return _ptr->order_restore(context, order);
     }
+
+    ///convert to exchange
+    Exchange get_exchange() const {
+        return _ptr->get_exchange();
+    }
+
+    Log get_log() const {
+        return _ptr->get_log();
+    }
+
 
 protected:
     IExchangeContext *_ptr;

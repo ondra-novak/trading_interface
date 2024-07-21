@@ -12,6 +12,7 @@ namespace trading_api {
 class IExchangeService {
 public:
 
+
     virtual ~IExchangeService() = default;
 
     ///Called to init exchange service
@@ -81,29 +82,38 @@ public:
      */
     virtual void batch_cancel(std::span<Order> orders) = 0;
 
-    ///Create accounts
-    /**
-     * @param account_idents list of account identifiers (exchange specifics)
-     * @param cb function which receives accounts per identifier. If
-     * account doesn't exists, it returns null account object
-     *
-     * @note each account should be created only once. Repeatedly called this function
-     * with same identifier should return the same account.
-     */
-    virtual void create_accounts(std::vector<std::string> account_idents, Function<void(std::vector<Account>)> cb) = 0;
 
-    ///Creates instruments available for current account
+    ///Query for instruments
     /**
-     * @param instruments idenfiers of instruments
-     * @param accunt account
-     * @param cb function which receives instruments per identifier. If
-     * instrument doesn't exists, it returns null account object
+     * @param query query string - this is exchange specific
+     * @param label defines label for populated instruments. It also works
+     *  as negative query, because causes removal of instruments populated under
+     *  different label from the result To repopulate instrument under
+     *  different label you need to destroy all copies of instrument instance
+     * @param cb callback function which receives result for each instrument. There is
+     *  'end' callback, however the closure of the function is eventually destroyed at
+     *  the end.
      *
-     * @note each instrument should be created only once. Repeatedly called this function
-     * with same identifier should return the same instrument.
+     * @note function is asynchronous
      */
-    virtual void create_instruments(std::vector<std::string> instruments, Account accunt, Function<void(std::vector<Instrument>)> cb) = 0;
+    virtual void query_instruments(std::string_view query, std::string_view label, Function<void(Instrument)> cb) = 0;
 
+
+
+    ///Query for accounts
+    /**
+     * @param query query string - this is exchange specific
+     * @param label defines label for populated instruments. It also works
+     *  as negative query, because causes removal of accounts populated under
+     *  different label from the result To repopulate account under
+     *  different label you need to destroy all copies of instrument instance
+     * @param cb callback function which receives result for each instrument. There is
+     *  'end' callback, however the closure of the function is eventually destroyed at
+     *  the end.
+     *
+     * @note function is asynchronous
+     */
+    virtual void query_accounts(std::string_view query, std::string_view label, Function<void(Account)> cb) = 0;
 
     ///Get exchange human readable name
     virtual std::string get_name() const = 0;

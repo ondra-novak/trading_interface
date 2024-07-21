@@ -21,8 +21,6 @@ public:
     SimExchange(GlobalScheduler scheduler, Config config);
 
     virtual void init(ExchangeContext context, const StrategyConfig &config) override;
-    virtual void create_accounts(std::vector<std::string> account_idents,
-            Function<void(std::vector<Account>)> cb) override;
     virtual StrategyConfigSchema get_config_schema() const override;
     virtual Order create_order(const Instrument &instrument,
             const Account &account, const Order::Setup &setup) override;
@@ -41,8 +39,6 @@ public:
     virtual void update_instrument(const Instrument &i) override;
     virtual void unsubscribe(SubscriptionType type, const Instrument &i)
             override;
-    virtual void create_instruments(std::vector<std::string> instruments,
-            Account accunt, Function<void(std::vector<Instrument>)> cb) override;
     virtual void order_apply_report(const Order &order,
             const Order::Report &report) override;
     virtual std::string get_name() const override;

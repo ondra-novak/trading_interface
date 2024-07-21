@@ -44,6 +44,7 @@ public:
     ///events available for clients
     class Events {
     public:
+        virtual void on_http_established() = 0;
         virtual void on_established() = 0;
         virtual void on_error(std::string_view error_msg) = 0;
         virtual void on_closed() = 0;
@@ -445,12 +446,6 @@ public:
 
 protected:
 
-    WebSocketClient(WebSocketContext &ctx,
-            std::string_view &&url,
-            std::string_view &&protocol,
-            CustomHeaders &&hdrs,
-            const char *force_HTTP_method);
-
 
     mutable std::mutex _mx;
     CustomHeaders _headers;
@@ -486,9 +481,8 @@ protected:
     virtual bool on_writable() override;
     //event - closed
     virtual void on_closed() override;
-    //event - closed
     virtual void on_pong() override;
-
+    virtual void on_http_established() override;
     virtual void on_add_custom_headers(const WebSocketContext::HeaderEmit &ctx) override;
 
 
@@ -565,32 +559,72 @@ public:
      */
     bool read_body(Data &data);
 
+    enum ReadStatus {
+        data, eof, timeout
+    };
+
     ///receives data synchronously
     /**
      * @param data reference to buffer
+     * @param timeout_ms timeout in milliseconds
+     * @param wait_all if true, wait until whole content is read. Note the timeout is
+     * applied to each segment
      * @retval true read
      * @retval false EOF
      */
-    bool read_body_sync(Data &data);
+    ReadStatus read_body_sync(Data &data,  bool wait_all = false, unsigned int timeout_ms = 30000);
+
+    ///returns whether background read was finished
+    /**
+     * @retval false still reading
+     * @retval true finished
+     */
+    bool is_finished() const;
+
+    ///Retrieve status
+    /**
+     * @return known status code. Returns -1 if code is not yiet available
+     * or if error
+     *
+     * @note the status is available only after first notification.
+     */
+    int get_status() const;
+
+    ///Retrieve status synchronously
+    /** Blocks execution until headers are processed
+     *
+     * @param timeout_ms timeout in milliseconds
+     * @return status code. If the code is -1, then error happened
+     */
+    int get_status_sync(unsigned int timeout_ms = 30000);
 
     ///enable notification about incoming data
     void notify_data_available(WSEventListener &evl, WSEventListener::ClientID id);
     ///disable notification
     void disable_data_available_notification();
 
+    ///Retrieves last error
+    /**
+     * @return if empty, no error recorded. Otherwise contains libwebsockets
+     * error text
+     */
+    std::string_view get_last_error() const;
+
 protected:
     CustomHeaders _headers;
     struct lws *_wsi = nullptr;  //< connection handle
     Data _response = {};
-    std::mutex _mx;
+    mutable std::mutex _mx;
     WSEventListener *_recv_el = nullptr;
     WSEventListener::ClientID _recv_el_id = 0;
     bool _finished = false;
+    int _status = -1;
     std::string _last_error;
     std::vector<char> _request_body;
     bool _expect_body = false;
 
     virtual void on_pong() override;
+    virtual void on_http_established() override;
     virtual void on_established() override;
     virtual void on_error(std::string_view error_msg) override;
     virtual void on_receive(std::string_view data) override;

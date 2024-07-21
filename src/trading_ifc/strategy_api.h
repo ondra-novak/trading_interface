@@ -3,7 +3,7 @@
 
 #include "strategy.h"
 #include "module_decl.h"
-
+#include "weak_object_map.h"
 
 
 #endif

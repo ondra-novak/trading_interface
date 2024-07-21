@@ -30,6 +30,9 @@ public:
         Events *ev = reinterpret_cast<Events *>(user);
 
         switch (reason) {
+            case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:
+                if (ev) ev->on_http_established();
+                break;
             case LWS_CALLBACK_CLIENT_ESTABLISHED:
                 if (ev) ev->on_established();
                 break;
@@ -279,6 +282,9 @@ static lws *do_connect(void *user, WebSocketContext &ctx, std::string_view url,
     if (!is_known) {
         throw std::runtime_error("Unsupported protocol: "+ std::string(url));
     }
+    if ((force_HTTP_method== nullptr) != is_websocket) {
+        throw std::runtime_error("Protocol mismatch (use wss for websocket and https for http protocol): "+ std::string(url));
+    }
 
     auto pddot = url.find(':');
     auto pathsep = url.find('/');
@@ -348,14 +354,6 @@ WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url,
 }
 
 
-
-WebSocketClient::WebSocketClient(WebSocketContext &ctx,
-        std::string_view &&url,
-        std::string_view &&protocol,
-        CustomHeaders &&headers,
-        const char *force_HTTP_method)
-:_headers(std::move(headers)) {
-}
 
 
 void WebSocketClient::on_established() {
@@ -545,6 +543,9 @@ int WebSocketClient::send_ping() {
     return _pong_counter;
 }
 
+void WebSocketClient::on_http_established() {
+}
+
 void WebSocketClient::on_add_custom_headers(const WebSocketContext::HeaderEmit &emit) {
 
     for (auto &[k, v]: _headers) {
@@ -634,6 +635,21 @@ void HttpClientRequest::disable_data_available_notification() {
     _recv_el = nullptr;
 }
 
+void HttpClientRequest::on_http_established() {
+    _status = lws_http_client_http_response(_wsi);
+}
+
+int HttpClientRequest::get_status_sync(unsigned int timeout_ms) {
+    int status = get_status();
+    WSEventListener lsn;
+    notify_data_available(lsn, 0);
+    while (status < 0 && lsn.wait_for(std::chrono::milliseconds(timeout_ms)) && get_last_error().empty()) {
+        status = get_status();
+    }
+    disable_data_available_notification();
+    return status;
+}
+
 void HttpClientRequest::on_closed() {
     std::lock_guard _(_mx);
     _finished = true;
@@ -650,15 +666,42 @@ bool HttpClientRequest::read_body(Data &data) {
     return true;
 }
 
-bool HttpClientRequest::read_body_sync(Data &data) {
+HttpClientRequest::ReadStatus HttpClientRequest::read_body_sync(Data &res_data,  bool wait_all, unsigned int timeout_ms) {
     WSEventListener evl;
     notify_data_available(evl, 0);
-    while (!read_body(data)) {
-        evl.wait();
+    if (wait_all) {
+        while (!is_finished()) {
+            if (!evl.wait_for(std::chrono::milliseconds(timeout_ms))) {
+                disable_data_available_notification();
+                return timeout;
+            }
+        }
+    }
+    while (!read_body(res_data)) {
+        if (!evl.wait_for(std::chrono::milliseconds(timeout_ms))) {
+            disable_data_available_notification();
+            return timeout;
+        }
     }
     disable_data_available_notification();
-    return !data.empty();
+    return res_data.empty()?eof:data;
 }
+
+bool HttpClientRequest::is_finished() const {
+    std::lock_guard _(_mx);
+    return _finished;
+}
+
+int HttpClientRequest::get_status() const {
+    std::lock_guard _(_mx);
+    return _status;
+}
+
+std::string_view HttpClientRequest::get_last_error() const {
+    std::lock_guard _(_mx);
+    return _last_error;
+}
+
 /*
 int main() {
 

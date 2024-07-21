@@ -58,7 +58,7 @@ void SimExchange::order_apply_report(const Order &order,
     bsorder.get_status().update_report(report);
 
 }
-
+#if 0
 void SimExchange::create_accounts(std::vector<std::string> account_idents,
         Function<void(std::vector<Account>)> cb) {
     std::vector<Account> acc;
@@ -68,13 +68,6 @@ void SimExchange::create_accounts(std::vector<std::string> account_idents,
     }
     cb(std::move(acc));
 }
-
-
-void SimExchange::restore_orders(void *context, std::span<SerializedOrder> orders) {
-    //todo
-}
-
-
 void SimExchange::create_instruments(std::vector<std::string> instruments,
         Account , Function<void(std::vector<Instrument>)> cb) {
     std::vector<Instrument> instr;
@@ -84,6 +77,13 @@ void SimExchange::create_instruments(std::vector<std::string> instruments,
     }
     cb(std::move(instr));
 }
+
+#endif
+void SimExchange::restore_orders(void *context, std::span<SerializedOrder> orders) {
+    //todo
+}
+
+
 
 std::string SimExchange::get_name() const {
     return "Simulator";

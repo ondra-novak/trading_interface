@@ -39,6 +39,13 @@ concept is_pair = requires(T x) {
     {x.second};
 };
 
+template<typename T>
+concept has_to_string_global = requires(T x) {
+    {to_string(x)}->std::convertible_to<std::string_view>;
+};
+
+
+
 class Log  {
 public:
 
@@ -100,7 +107,7 @@ public:
     }
 
     template<typename ... Args>
-    void output(Serverity level, std::string_view pattern, Args && ... args) {
+    void output(Serverity level, const std::string_view &pattern, Args && ... args) {
         if (level >= _min_level) {
             {
                 vector_streambuf buffer(_buffer);
@@ -112,6 +119,30 @@ public:
         }
     }
 
+    template<typename ... Args>
+    void trace(const std::string_view &pattern, Args && ... args) {
+        output(Serverity::trace, pattern, std::forward<Args>(args)...);
+    }
+    template<typename ... Args>
+    void debug(const std::string_view &pattern, Args && ... args) {
+        output(Serverity::debug, pattern, std::forward<Args>(args)...);
+    }
+    template<typename ... Args>
+    void info(const std::string_view &pattern, Args && ... args) {
+        output(Serverity::info, pattern, std::forward<Args>(args)...);
+    }
+    template<typename ... Args>
+    void warning(const std::string_view &pattern, Args && ... args) {
+        output(Serverity::warning, pattern, std::forward<Args>(args)...);
+    }
+    template<typename ... Args>
+    void error(const std::string_view &pattern, Args && ... args) {
+        output(Serverity::error, pattern, std::forward<Args>(args)...);
+    }
+    template<typename ... Args>
+    void fatal(const std::string_view &pattern, Args && ... args) {
+        output(Serverity::fatal, pattern, std::forward<Args>(args)...);
+    }
 
 protected:
     std::shared_ptr<ILog> _ptr;
@@ -120,7 +151,7 @@ protected:
     std::size_t _context_size = 0;
 
     template<typename ... Args>
-    void append_context(std::string_view pattern, Args && ... args) {
+    void append_context(const std::string_view &pattern, Args && ... args) {
         _buffer.push_back('[');
         {
             vector_streambuf buffer(_buffer);
@@ -135,6 +166,8 @@ protected:
     void format_item(std::ostream &out, const T &val) {
         if constexpr(std::is_invocable_v<T>) {
             format_item(out,val());
+        } else if constexpr(has_to_string_global<T>) {
+            format_item(out,to_string(val));
         } else if constexpr(is_container<T>) {
             out << '(';
             auto beg = val.begin();
@@ -161,7 +194,7 @@ protected:
     }
 
     template<typename ... Args>
-    void format(std::ostream &out, std::string_view pattern, Args && ... args) {
+    void format(std::ostream &out, const std::string_view &pattern, Args && ... args) {
         std::bitset<64> mask={};
         auto iter = pattern.begin();
         auto end = pattern.end();

@@ -12,6 +12,13 @@ enum class SubscriptionType {
     orderbook,
 };
 
+inline std::string_view to_string(SubscriptionType type) {
+    switch (type) {
+        case SubscriptionType::ticker: return "ticker";
+        case SubscriptionType::orderbook: return "orderbook";
+        default: return "unknown";
+    }
+}
 
 
 class IInstrument {
@@ -33,6 +40,7 @@ public:
         cfd
     };
 
+
     struct Config {
         Type type = Type::unknown;
         ///quotation price step
@@ -47,6 +55,10 @@ public:
         double min_volume = 0;
         ///fixed quantum factor between calculated pnl a real profit - (ex: 0.0001 USDT -> XBT = +10000 USDT profit = +1 XBT)
         double quantum_factor = 1;
+        ///required margin (0.05 = 5% = 20x leverage)
+        double required_margin = 1;
+        ///maintenance margin (0.025 = 2.5% = 40x leverage)
+        double maintenance_margin = 1;
         ///instrument is tradable (you can place orders)
         bool tradable = false;
         ///instrument can be shorted

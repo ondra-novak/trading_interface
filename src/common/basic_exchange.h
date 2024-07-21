@@ -9,8 +9,11 @@
 
 namespace trading_api {
 
-class BasicExchangeContext: public IExchangeContext {
+class BasicExchangeContext: public IExchangeContext, public IExchange, public std::enable_shared_from_this<BasicExchangeContext> {
 public:
+
+
+    BasicExchangeContext(std::string label);
 
 
     void init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration);
@@ -145,7 +148,7 @@ public:
      * @retval false there is no last ticker stored
      */
 
-    bool get_last_ticker(const Instrument &instrument, Ticker &tk);
+    virtual bool get_last_ticker(const Instrument &instrument, Ticker &tk) const override;
 
     ///Retrieve last orderbook state synchronously
     /**
@@ -154,16 +157,16 @@ public:
      * @retval true received
      * @retval false cannot be retrieved synchronously
      */
-    bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb);
+    virtual bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb) const override;
 
     ///Retrieve exchange icon
-    std::optional<IExchange::Icon> get_icon() const;
+    std::optional<IExchange::Icon> get_icon() const override;
 
     ///Get pointer to AbstractExchange from Exchange object
     static BasicExchangeContext &from_exchange(Exchange ex);
 
-    std::string get_name() const;
-    std::string get_id() const;
+    virtual std::string get_name() const override;
+    virtual std::string get_id() const override;
 
     ///Applies report to order object
     /**
@@ -196,13 +199,17 @@ public:
 
 
 
+    virtual Exchange get_exchange() const override;
 
 
 
 protected:
 
     ///Object's lock, derived class must use this lock to lock internals
-    std::recursive_mutex _mx;
+    mutable std::recursive_mutex _mx;
+
+    std::string _label;
+
 
     struct Subscription {
         SubscriptionType type;
@@ -267,52 +274,16 @@ protected:
      */
     virtual void order_restore(void *target, const Order &order) override;
 
+    virtual std::string get_label() const override;
+
+
+
 private:
     void send_subscription_notify(const Instrument &i, SubscriptionType type);
 
     std::unique_ptr<IExchangeService> _ptr;
 
 };
-
-
-class BasicExchange: public IExchange {
-public:
-
-    BasicExchange(std::unique_ptr<BasicExchangeContext> impl, std::string label)
-        :_impl(std::move(impl)),_label(label) {}
-
-    virtual std::string get_label() const override {return _label;};
-    virtual std::string get_name() const override {
-        return _impl->get_name();
-    }
-    virtual std::string get_id() const override {
-        return _impl->get_id();
-    }
-    virtual std::optional<Icon> get_icon() const override {
-        return _impl->get_icon();
-    }
-    virtual void disconnect(void *t) const {
-        _impl->disconnect(reinterpret_cast<const IEventTarget *>(t));
-    }
-    virtual BasicExchangeContext *get_instance() const {return _impl.get();}
-
-    virtual bool get_last_orderbook(const Instrument &instrument,
-            OrderBook &ordb) const override {
-        return _impl->get_last_orderbook(instrument, ordb);
-    }
-    virtual bool get_last_ticker(const Instrument &instrument,
-            Ticker &tk) const override {
-        return _impl->get_last_ticker(instrument, tk);
-    }
-
-
-protected:
-    std::unique_ptr<BasicExchangeContext> _impl;
-    std::string _label;
-
-};
-
-
 
 
 }

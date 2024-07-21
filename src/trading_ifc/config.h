@@ -64,7 +64,7 @@ public:
         operator T () const {
             if (ref == nullptr) return T();
             return std::visit([&](const auto &x){
-                if constexpr(std::is_constructible_v<decltype(x), T>) {
+                if constexpr(std::is_constructible_v<T, decltype(x)>) {
                     return T(x);
                 } else {
                     return T();
@@ -72,17 +72,33 @@ public:
             },*ref);
         }
 
+
         template<typename T>
-        T operator()(const T &defval) const {
-            if (ref == nullptr) return defval;
+        T as() const {
+            if (ref == nullptr) return T();
             return std::visit([&](const auto &x){
-                if constexpr(std::is_constructible_v<decltype(x), T>) {
+                if constexpr(std::is_constructible_v<T, decltype(x)>) {
                     return T(x);
                 } else {
-                    return defval;
+                    return T();
                 }
             },*ref);
         }
+
+        template<typename Def, typename T = Def>
+        T get(const Def &def) const {
+            static_assert(std::is_constructible_v<T, const Def &>);
+            if (ref == nullptr) return T(def);
+            return std::visit([&](const auto &x){
+                if constexpr(std::is_constructible_v<T, decltype(x)>) {
+                    return T(x);
+                } else {
+                    return T(def);
+                }
+            },*ref);
+        }
+
+        bool operator!() const {return ref == nullptr;}
 };
 
     ValueRef operator[](std::string_view name) const {
@@ -91,6 +107,12 @@ public:
         else return {iter->second};
     }
 
+
+
+    template<std::convertible_to<std::string_view> ... Args>
+    auto operator()(const Args & ... args) const {
+        return std::make_tuple(operator[](std::string_view(args))...);
+    }
 
 protected:
     std::map<std::string_view, const Value *> _values;

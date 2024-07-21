@@ -2,6 +2,9 @@
 
 namespace trading_api {
 
+BasicExchangeContext::BasicExchangeContext(std::string label)
+            :_label(std::move(label)) {}
+
 void BasicExchangeContext::init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration) {
     this->_ptr = std::move(svc);
     _ptr->init(this, configuration);
@@ -70,6 +73,12 @@ void BasicExchangeContext::order_apply_fill(const Order &order,
     _ptr->order_apply_fill(order, fill);
 }
 
+
+
+std::string BasicExchangeContext::get_label() const {
+    return _label;
+}
+
 void BasicExchangeContext::send_subscription_notify(const Instrument &i, SubscriptionType type) {
     Subscription s{type, i, nullptr};
     auto iter = _subscriptions.lower_bound(s);
@@ -83,7 +92,7 @@ void BasicExchangeContext::send_subscription_notify(const Instrument &i, Subscri
     if (remain == 0) _ptr->unsubscribe(type, i);
 }
 
-bool BasicExchangeContext::get_last_ticker(const Instrument &instrument, Ticker &tk) {
+bool BasicExchangeContext::get_last_ticker(const Instrument &instrument, Ticker &tk) const {
     std::lock_guard _(_mx);
     auto iter = _tickers.find(instrument);
     if (iter == _tickers.end()) return false;
@@ -91,7 +100,7 @@ bool BasicExchangeContext::get_last_ticker(const Instrument &instrument, Ticker 
     return true;
 }
 
-bool BasicExchangeContext::get_last_orderbook(const Instrument &instrument, OrderBook &ordb) {
+bool BasicExchangeContext::get_last_orderbook(const Instrument &instrument, OrderBook &ordb) const {
     std::lock_guard _(_mx);
     auto iter = _orderbooks.find(instrument);
     if (iter == _orderbooks.end()) return false;
@@ -204,10 +213,12 @@ void BasicExchangeContext::order_restore(void *target, const Order &order) {
 
 BasicExchangeContext &BasicExchangeContext::from_exchange(Exchange ex) {
     const IExchange *e = ex.get_handle().get();
-    const BasicExchange *be = dynamic_cast<const BasicExchange *>(e);
-    if (be == nullptr) throw std::runtime_error("Unsupported exchange object");
-    return *be->get_instance();
+    const BasicExchangeContext *be = dynamic_cast<const BasicExchangeContext *>(e);
+    return const_cast<BasicExchangeContext &>(*be);
 }
 
+Exchange BasicExchangeContext::get_exchange() const {
+    return Exchange(shared_from_this());
+}
 
 }

@@ -13,6 +13,19 @@ find_package(Git)
 if(GIT_EXECUTABLE)
 	execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()
+
+# Find LevelDB using pkg-config
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSSL REQUIRED openssl)
+pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
+
+
+find_library(LEVELDB_LIBRARIES leveldb)
+if(NOT LEVELDB_LIBRARIES)
+  message(FATAL_ERROR "libleveldb missing (libleveldb-dev)?")
+endif()
+
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/)
