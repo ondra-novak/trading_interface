@@ -16,11 +16,12 @@ add_executable (secure_rpc_test
          secure_rpc.cpp)
 target_link_libraries(secure_rpc_test ${LIBWEBSOCKETS_LIBRARIES} ${LIBSSL_LIBRARIES} ${STANDARD_LIBRARIES})
 
-add_library(binance SHARED 
-    rpc_client.cpp 
+add_library(binance SHARED
+    rpc_client.cpp
     ws_streams.cpp
     secure_rpc.cpp
     exchange_main.cpp
     instrument.cpp
+    rest_client.cpp
 )
-set_target_properties(binance PROPERTIES PREFIX "")  
+set_target_properties(binance PROPERTIES PREFIX "")
