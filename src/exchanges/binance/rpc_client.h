@@ -170,6 +170,11 @@ public:
     int get_pong_counter();
 
 
+    auto get_last_activity() const {
+        _client.get_last_activity();
+    }
+
+
     class IThreadMonitor {
     public:
         virtual void on_reconnect(std::string reason) = 0;

@@ -1,48 +1,34 @@
-#include "secure_rpc.h"
-
+#include "rest_client.h"
+#include "../../common/basic_log.h"
 
 
 int main() {
 
-    WebSocketContext ctx;
-    HttpClientRequest client(ctx, "https://fapi.binance.com/fapi/v1/exchangeInfo");
-    int status = client.get_status_sync();
-    std::cerr << "status:" << status << std::endl;
-    HttpClientRequest::Data data;
-    client.read_body_sync(data, true);
-    std::cout << std::string_view(data.begin(), data.end()) << std::endl;
+    trading_api::Log log(std::make_shared<trading_api::BasicLog>(std::cerr, trading_api::ILog::Serverity::trace));
+    WebSocketContext wsctx;
+    RestClientContext restctx(wsctx,log);
 
-/*
-    RPCClient rpc(ctx, "wss://fapi.binance.com/fapi/fapi/v1/exchangeInfo");
-    rpc.run_thread_auto_reconnect(rpc);
-    auto res = rpc("exchangeInfo",{}).get();
-    std::cout << res.content.to_json() << std::endl;
+    RestClient client(restctx, "https://testnet.binancefuture.com/fapi", {
+            "3cfa2991082a67c0d3e20318b172d6badc07c1169ace1d83dae410b43b34f8d5",
+            "13795a26cf2e407347d9a3a3c3283122f63cfe8dd3f214708e80c4cf002845bc"
+    }, 10000);
 
-      HttpClientRequest client(ctx, HttpMethod::POST, "https://httpbin.org/post","Hello world",{{"Content-Type","text/plain"}});
-    HttpClientRequest::Data data;
-    while (client.read_body_sync(data)) {
-        std::cout << std::string_view(data.begin(), data.end()) << std::endl;
-    }
+    auto print_result = [](const RestClient::Result &res){
+        std::cout << res.is_error() << std::endl;
+        std::cout << res.content.to_json() << std::endl;
+    };
 
-
-    std::cout << std::cin.get() << std::endl;
+    client.public_call("/v1/depth", {
+            {"symbol","BTCUSDT"},
+            {"limit", 5}
+    }, print_result);
+    client.signed_call(HttpMethod::GET, "/v2/account", {}, print_result);
 
 
-
-
-    SecureRPCClient::Account red (
-            "",
-            ""
-    );
+    std::cout << "Press enter to exit" << std::endl << std::cin.get();
 
 
 
-    SecureRPCClient rpc(ctx, "wss://ws-fapi.binance.com/ws-fapi/v1");
-    rpc.run_thread_auto_reconnect(rpc);
-
-    auto res = rpc(red,"account.status",json::type_t::object).get();
-    std::cout << res.content.to_json() << std::endl;
-*/
 }
 
 

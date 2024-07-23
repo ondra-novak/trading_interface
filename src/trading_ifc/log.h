@@ -5,25 +5,46 @@
 #include <bitset>
 
 #include <string_view>
+#include <vector>
 namespace trading_api {
 
 class ILog {
 public:
 
     enum class Serverity {
-        trace,
-        debug,
-        info,
-        warning,
-        error,
-        fatal
+        trace = 0,
+        debug = 1,
+        info = 2,
+        warning = 3,
+        error = 4,
+        fatal = 5,
+        disabled = 100
     };
 
-    virtual void output(Serverity level, std::string_view msg) = 0;
+    virtual void output(Serverity level, std::string_view msg) const = 0;
     virtual Serverity get_min_level() const = 0;
     virtual ~ILog() = default;
 
     class Null;
+};
+
+inline std::string_view to_string(ILog::Serverity srvt) {
+    switch (srvt) {
+        case ILog::Serverity::debug: return "debug";
+        case ILog::Serverity::trace: return "trace";
+        case ILog::Serverity::info: return "info";
+        case ILog::Serverity::warning: return "warning";
+        case ILog::Serverity::error: return "ERROR";
+        case ILog::Serverity::fatal: return "FATAL";
+        case ILog::Serverity::disabled: return "disabled";
+        default: return "unknown";
+    }
+}
+
+class ILog::Null: public ILog {
+public:
+    virtual void output(Serverity , std::string_view ) const override {}
+    virtual Serverity get_min_level() const override {return Serverity::disabled;}
 };
 
 template<typename T>
@@ -44,10 +65,16 @@ concept has_to_string_global = requires(T x) {
     {to_string(x)}->std::convertible_to<std::string_view>;
 };
 
+template<typename T>
+concept can_output_to_ostream = requires(T x, std::ostream &stream) {
+    {stream << x};
+};
 
+template<typename T> constexpr bool const_false = false;
 
-class Log  {
+class Log  : public Wrapper<ILog>{
 public:
+
 
     // Vlastní buffer pro zápis do std::vector<char>
     class vector_streambuf : public std::streambuf {
@@ -77,7 +104,8 @@ public:
 
     using Serverity = ILog::Serverity;
 
-    explicit Log(std::shared_ptr<ILog> ptr):_ptr(std::move(ptr)),_min_level(_ptr->get_min_level()) {}
+    Log() = default;
+    Log(std::shared_ptr<const ILog> lgptr):Wrapper<ILog>(lgptr),_min_level(this->_ptr->get_min_level()) {}
 
     ///Create new log object with context
     /**
@@ -90,20 +118,24 @@ public:
      */
     template<typename ... Args>
     Log(const Log &other, std::string_view pattern, Args && ... args)
-        :_ptr(other._ptr)
+        :Wrapper<ILog>(other)
         ,_buffer(other._buffer)
         ,_min_level(other._min_level)
     {
-        append_context(pattern, std::forward<Args>(args)...);
+        if (_min_level != Serverity::disabled) {
+            append_context(pattern, std::forward<Args>(args)...);
+        }
     }
 
     template<typename ... Args>
     Log(Log &&other, std::string_view pattern, Args && ... args)
-        :_ptr(std::move(other._ptr))
+        :Wrapper<ILog>(std::move(other))
         ,_buffer(std::move(other._buffer))
         ,_min_level(other._min_level)
     {
-        append_context(pattern, std::forward<Args>(args)...);
+        if (_min_level != Serverity::disabled) {
+            append_context(pattern, std::forward<Args>(args)...);
+        }
     }
 
     template<typename ... Args>
@@ -145,7 +177,6 @@ public:
     }
 
 protected:
-    std::shared_ptr<ILog> _ptr;
     std::vector<char> _buffer;
     Serverity _min_level;
     std::size_t _context_size = 0;
@@ -164,10 +195,20 @@ protected:
 
     template<typename T>
     void format_item(std::ostream &out, const T &val) {
-        if constexpr(std::is_invocable_v<T>) {
+        if constexpr(can_output_to_ostream<T>) {
+            out << val;
+        } else if constexpr(std::is_invocable_v<T>) {
             format_item(out,val());
         } else if constexpr(has_to_string_global<T>) {
             format_item(out,to_string(val));
+        } else if constexpr(std::is_same_v<T, std::exception_ptr>) {
+            try {
+                std::rethrow_exception(val);
+            } catch (std::exception &e) {
+                format_item(out, e.what());
+            } catch (...) {
+                format_item(out, "<unknown exception>");
+            }
         } else if constexpr(is_container<T>) {
             out << '(';
             auto beg = val.begin();
@@ -189,7 +230,7 @@ protected:
             format_item(val.second);
             _buffer.push_back('>');
         } else {
-            out << val;
+            static_assert(const_false<T>, "Cannot print type, define operator << ");
         }
     }
 
@@ -203,9 +244,15 @@ protected:
             if (*iter == '{') {
                 unsigned int index = 0;
                 ++iter;
+                if (iter != end && *iter == '{') {
+                    out << '{';
+                    ++iter;
+                    continue;
+                }
                 while (iter != end && *iter >='0' && *iter <='9') {
                     index = index * 10 +  (*iter-'0');
                 }
+                if (iter != end && *iter == '}') ++iter;
                 if (index == 0) {
                     ++cur_index;
                     while (cur_index < mask.size() && mask[cur_index-1]) ++cur_index;
@@ -234,7 +281,6 @@ protected:
     }
 
 };
-
 
 
 

@@ -2,8 +2,9 @@
 
 namespace trading_api {
 
-BasicExchangeContext::BasicExchangeContext(std::string label)
-            :_label(std::move(label)) {}
+BasicExchangeContext::BasicExchangeContext(std::string label, Log log)
+            :_label(std::move(label))
+            ,_log(std::move(log),"ex/{}",_label) {}
 
 void BasicExchangeContext::init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration) {
     this->_ptr = std::move(svc);
@@ -79,6 +80,17 @@ std::string BasicExchangeContext::get_label() const {
     return _label;
 }
 
+void BasicExchangeContext::query_instruments(std::string_view query,
+        std::string_view label, Function<void(Instrument)> cb) {
+    _ptr->query_instruments(query, label, std::move(cb));
+
+}
+
+void BasicExchangeContext::query_accounts(std::string_view query,
+        std::string_view label, Function<void(Account)> cb) {
+    _ptr->query_accounts(query, label, std::move(cb));
+}
+
 void BasicExchangeContext::send_subscription_notify(const Instrument &i, SubscriptionType type) {
     Subscription s{type, i, nullptr};
     auto iter = _subscriptions.lower_bound(s);
@@ -86,8 +98,9 @@ void BasicExchangeContext::send_subscription_notify(const Instrument &i, Subscri
     while (iter != _subscriptions.end() && iter->first.i == i && iter->first.type == type) {
         s.target = iter->first.target;
         if (iter->second == SubscriptionLimit::onceshot) iter = _subscriptions.erase(iter);
-        else ++remain;
+        else {++remain; ++iter;};
         s.target->on_event(s.i, s.type);
+
     }
     if (remain == 0) _ptr->unsubscribe(type, i);
 }
@@ -160,8 +173,9 @@ void BasicExchangeContext::object_updated(const Instrument &instrument) {
 
 void BasicExchangeContext::disconnect(const IEventTarget *target) {
     std::lock_guard _(_mx);
-    for (auto iter = _subscriptions.begin(); iter != _subscriptions.end(); ++iter) {
+    for (auto iter = _subscriptions.begin(); iter != _subscriptions.end();) {
         if (iter->first.target == target) iter = _subscriptions.erase(iter);
+        else ++iter;
     }
     for (auto &[k,lst]: _account_update_waiting) {
         lst.erase(std::remove(lst.begin(), lst.end(), target), lst.end());
@@ -219,6 +233,10 @@ BasicExchangeContext &BasicExchangeContext::from_exchange(Exchange ex) {
 
 Exchange BasicExchangeContext::get_exchange() const {
     return Exchange(shared_from_this());
+}
+
+Log BasicExchangeContext::get_log() const {
+    return _log;
 }
 
 }

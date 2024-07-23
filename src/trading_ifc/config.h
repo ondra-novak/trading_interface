@@ -37,6 +37,7 @@ using ValueBase = std::variant<std::monostate,
                                bool,
                                DateValue,
                                TimeValue,
+                               std::string,
                                std::span<Value> >;
 
 

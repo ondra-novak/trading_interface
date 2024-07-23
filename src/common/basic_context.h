@@ -195,7 +195,7 @@ protected:
                 _strategy->on_unhandled_exception();
             } catch (...) {
                 _storage->rollback();
-                throw;
+                _logger.fatal("Unhandled exception in strategy{}", std::current_exception());
             }
         }
         flush_batches();

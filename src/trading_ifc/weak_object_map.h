@@ -132,6 +132,10 @@ public:
     void erase(const std::string_view &id);
     void gc();
 
+    template<typename X, typename ... Args>
+    std::shared_ptr<T> create_if_not_exists(const std::string_view &id, Args && ... args);
+
+
 protected:
 
     using Map = std::unordered_map<UnorderedMapStringKey, std::weak_ptr<T>, UnorderedMapStringKey::Hasher>;
@@ -165,6 +169,25 @@ inline void WeakObjectMap<T>::erase(const std::string_view &id) {
 }
 
 template<typename T>
+template<typename X, typename ... Args>
+std::shared_ptr<T> WeakObjectMap<T>::create_if_not_exists(const std::string_view &id, Args && ... args) {
+    auto iter = _map.find(UnorderedMapStringKey::view(id));
+    if (iter == _map.end()) {
+        std::shared_ptr<T> c = std::make_shared<X>(std::forward<Args>(args)...);
+        _map.insert(std::pair(UnorderedMapStringKey(id), c));
+        return c;
+    } else {
+        std::shared_ptr<T> c = iter->second.lock();
+        if (c == nullptr) {
+            c = std::make_shared<X>(std::forward<Args>(args)...);
+            iter->second = c;
+        }
+        return c;
+    }
+}
+
+
+template<typename T>
 inline void WeakObjectMap<T>::gc() {
     auto iter = _map.begin();
     while (iter != _map.end()) {
@@ -190,7 +213,11 @@ public:
     void erase(const std::string_view &id) {
         std::lock_guard _(_mx);
         Super::erase(id);
-
+    }
+    template<typename X, typename ... Args>
+    std::shared_ptr<T> create_if_not_exists(const std::string_view &id, Args && ... args) {
+        std::lock_guard _(_mx);
+        return Super::template create_if_not_exists<X>(id, std::forward<Args>(args)...);
     }
     void gc() {
         std::lock_guard _(_mx);

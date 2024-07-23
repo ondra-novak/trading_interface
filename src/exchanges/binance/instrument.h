@@ -13,11 +13,12 @@ public:
         int base_asset_precision;
         int quote_precision;
         std::string quote_asset;
+        std::string base_asset;
         std::string id;
     };
 
 
-    BinanceInstrument(std::string label,
+    BinanceInstrument(std::string_view label,
             const Config &cfg,
             trading_api::Exchange x);
 

@@ -4,7 +4,89 @@
 #include <openssl/hmac.h>
 #include <sstream>
 
-RestClient::RestClient(WebSocketContext &ctx, std::string base_url, ApiCredents cred, unsigned int timeout_ms)
+thread_local bool RestClientContext::_worker_thread = false;
+
+void RestClientContext::start() {
+    _thr = std::jthread([this](auto stp){worker(std::move(stp));});
+}
+
+
+void RestClientContext::worker(std::stop_token stp) noexcept {
+
+    _worker_thread = true;
+    pthread_setname_np(pthread_self(), "REST/Dispatch");
+    std::unique_lock lk(this->_mx);
+    std::stop_callback __(stp, [&]{
+        this->signal(1);
+    });
+    HttpClientRequest::Data data;
+    while (!stp.stop_requested()) {
+        std::chrono::system_clock::time_point next_stop = std::chrono::system_clock::time_point::max();
+        std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+        for (auto iter = _active_requests.begin(); iter != _active_requests.end();) {
+            auto &ar = *iter;
+            lk.unlock(); //prevent deadlock acessing locked methods of clients...
+            if (ar.req.is_finished()) {
+                Result rs = {};
+                ar.req.read_body(data);
+                rs.status = ar.req.get_status();
+                std::string_view sv{data.begin(), data.end()};
+                std::string_view err =ar.req.get_last_error();
+                if (!err.empty()) {
+                    ar.log.error("{}", ar.req.get_last_error());
+                }
+                ar.log.trace("<< {} {}", rs.status, sv.substr(0, 255));
+                try {
+                    rs.content = json::value_t::from_json(sv);
+                } catch (/*parse error*/...) {
+                    rs.content = {data.begin(), data.end()};
+                }
+                ar.callback(rs);
+                if (_worker_thread == false) return;
+                lk.lock();  //lock when erase from list
+                iter = _active_requests.erase(iter);
+            } else {
+                auto nstp = ar.req.get_last_activity() + ar.timeout;
+                if (nstp < now) {
+                    ar.log.trace("<< (TIMEOUT)");
+                    ar.callback(Result{status_timeout,{}});
+                    lk.lock(); //lock when erase from list
+                    iter = _active_requests.erase(iter);
+                } else {
+                    next_stop = std::min(next_stop, nstp);
+                    lk.lock(); //lock when advancing list
+                    ++iter;
+                }
+            }
+        }
+        if (next_stop == std::chrono::system_clock::time_point::max()){
+            this->wait(std::move(lk));
+        } else {
+            this->wait_until(std::move(lk), next_stop);
+        }
+    }
+    auto _tmp = std::move(_active_requests);
+    lk.unlock();
+    _worker_thread = false;
+    for (auto &ar: _tmp) {
+        ar.log.trace("<< (CANCELED)");
+        ar.callback(Result{status_canceled,{}});
+    }
+}
+
+void RestClientContext::stop() {
+    if (_worker_thread) {
+        _worker_thread = false;
+        _thr.detach();
+    } else if (_thr.joinable()){
+        _thr.request_stop();
+        _thr.join();
+    }
+}
+
+
+
+RestClient::RestClient(RestClientContext &ctx, std::string base_url, ApiCredents cred, unsigned int timeout_ms)
 :_ctx(ctx)
 ,_base_url(std::move(base_url))
 ,_credents(std::move(cred))
@@ -21,11 +103,13 @@ std::ostream &operator << (std::ostream &stream, const RestClient::Value &v) {
             stream << x;
         }
     }, v);
+    return stream;
 }
+
+constexpr const char *hex_chars = "0123456789ABCDEF";
 
 template<typename InputIterator, typename OutputIterator>
 auto url_encode(InputIterator begin, InputIterator end, OutputIterator out) {
-    constexpr char *hex_chars = "0123456789ABCDEF";
     for (auto it = begin; it != end; ++it) {
         char c = *it;
         if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || c == '@' /*binance*/) {
@@ -41,7 +125,6 @@ auto url_encode(InputIterator begin, InputIterator end, OutputIterator out) {
 
 template<typename InputIterator, typename OutputIterator>
 auto hex_encode(InputIterator begin, InputIterator end, OutputIterator out) {
-    constexpr char *hex_chars = "0123456789abcdef";
     for (auto it = begin; it != end; ++it) {
         char c = *it;
         *out++ = hex_chars[(c >> 4) & 0x0F];
@@ -57,6 +140,7 @@ std::ostream &operator << (std::ostream &stream, const RestClient::UrlEncoded &v
     } else {
         stream << v.v;
     }
+    return stream;
 }
 
 template<typename Iter, typename ... Args>
@@ -77,12 +161,51 @@ std::string RestClient::build_query(Iter beg, Iter end, const Args & ... prefixe
 }
 
 
-json::value_t RestClient::public_GET(std::string_view cmd, Params params) {
-    std::string url = build_query(params.begin(), params.end(), _base_url, cmd);
-    return load_response(HttpClientRequest(_ctx, url));
+std::int64_t RestClient::get_server_time() const {
+
+    if (_server_time_adjust_state != 1) {
+        int need= -1;
+        if (_server_time_adjust_state.compare_exchange_strong(need, 0)) {
+            public_call("/v1/time", {}, [&](const Result &res){
+               if (res.is_error()) {
+                   _server_time_adjust_state = -1;
+                   _server_time_adjust_state.notify_all();
+               } else {
+                   std::int64_t cur_server_time = res.content["serverTime"].get();
+                   std::int64_t cur_local_time =
+                           std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::system_clock::now().time_since_epoch()
+                           ).count();
+                   auto diff = cur_server_time - cur_local_time;
+                   _server_time_adjust = std::chrono::milliseconds(diff);
+                   _server_time_adjust_state = 1;
+                   _server_time_adjust_state.notify_all();
+               }
+            });
+        }
+        need = 0;
+        while (need == 0) {
+            _server_time_adjust_state.wait(need);
+            need = _server_time_adjust_state;
+        }
+    }
+
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+            (std::chrono::system_clock::now()+_server_time_adjust).time_since_epoch()).count();
 }
 
-json::value_t RestClient::signed_req(HttpMethod method, std::string_view cmd, Params params) {
+HttpClientRequest RestClient::FactoryPublic::operator ()(WebSocketContext &wsctx, Log &log) {
+    std::string url = owner->build_query(params->begin(), params->end(), owner->_base_url, *cmd, "?");
+    log.trace(">> Public : GET {}", url);
+    return HttpClientRequest(wsctx,std::move(url));
+}
+
+HttpClientRequest RestClient::FactorySigned::operator()(WebSocketContext &wsctx, Log &log) {
+    log.trace(">> Signed : {} {} {}", method, url, body);
+    return HttpClientRequest(wsctx,method,std::move(url),std::move(body),std::move(hdrs));
+}
+
+RestClient::FactorySigned RestClient::prepare_signed(HttpMethod method, std::string_view cmd, Params params)  const {
     std::vector<ParamKV> p(params.begin(), params.end());
     const std::string_view timestamp_str = "timestamp";
     const std::string_view signature_str = "signature";
@@ -104,37 +227,18 @@ json::value_t RestClient::signed_req(HttpMethod method, std::string_view cmd, Pa
 
 
     if (method == HttpMethod::GET) {
-        return load_response(HttpClientRequest(_ctx, build_query(p.begin(), p.end(), _base_url, cmd, "?"), {
-                    {"X-MBX-APIKEY", _credents.api_key},
-                    {"User-Agent", std::string(user_agent)}
-        }));
+        return FactorySigned{method,build_query(p.begin(), p.end(), _base_url, cmd, "?"), {},
+            {{"X-MBX-APIKEY", _credents.api_key},
+             {"User-Agent", std::string(user_agent)}}
+        };
     } else {
         std::string whole_url(_base_url);
         whole_url.append(cmd);
-        return load_response(
-                HttpClientRequest(_ctx, method, whole_url, build_query(p.begin(),p.end()), {
+        return FactorySigned(method, whole_url, build_query(p.begin(),p.end()), {
                     {"X-MBX-APIKEY", _credents.api_key},
                     {"User-Agent", std::string(user_agent)},
                     {"Content-Type","application/x-www-form-urlencoded"}
-        }));
+        });
     }
 
-}
-
-json::value_t RestClient::load_response(HttpClientRequest &&req) {
-    HttpClientRequest::Data response;
-    auto status = req.read_body_sync(response, true, _timeout_ms);
-    if (status == HttpClientRequest::eof) throw std::runtime_error("Empty response");
-    if (status == HttpClientRequest::eof) throw std::runtime_error("Timeout");
-    try {
-        return json::value_t::from_json({response.begin(), response.end()});
-    } catch (...) {
-        return std::string_view({response.begin(), response.end()});
-    }
-}
-
-std::int64_t RestClient::get_server_time() const {
-    //just mockup
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
 }

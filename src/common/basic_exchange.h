@@ -13,7 +13,7 @@ class BasicExchangeContext: public IExchangeContext, public IExchange, public st
 public:
 
 
-    BasicExchangeContext(std::string label);
+    BasicExchangeContext(std::string label, Log log);
 
 
     void init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration);
@@ -199,9 +199,40 @@ public:
 
 
 
+    ///Query for instruments
+    /**
+     * @param query query string - this is exchange specific
+     * @param label defines label for populated instruments. It also works
+     *  as negative query, because causes removal of instruments populated under
+     *  different label from the result To repopulate instrument under
+     *  different label you need to destroy all copies of instrument instance
+     * @param cb callback function which receives result for each instrument. There is
+     *  'end' callback, however the closure of the function is eventually destroyed at
+     *  the end.
+     *
+     * @note function is asynchronous
+     */
+    void query_instruments(std::string_view query, std::string_view label, Function<void(Instrument)> cb);
+
+
+    ///Query for accounts
+    /**
+     * @param query query string - this is exchange specific
+     * @param label defines label for populated instruments. It also works
+     *  as negative query, because causes removal of accounts populated under
+     *  different label from the result To repopulate account under
+     *  different label you need to destroy all copies of instrument instance
+     * @param cb callback function which receives result for each instrument. There is
+     *  'end' callback, however the closure of the function is eventually destroyed at
+     *  the end.
+     *
+     * @note function is asynchronous
+     */
+    void query_accounts(std::string_view query, std::string_view label, Function<void(Account)> cb);
+
+
     virtual Exchange get_exchange() const override;
-
-
+    virtual Log get_log() const override;
 
 protected:
 
@@ -209,6 +240,7 @@ protected:
     mutable std::recursive_mutex _mx;
 
     std::string _label;
+    Log _log;
 
 
     struct Subscription {

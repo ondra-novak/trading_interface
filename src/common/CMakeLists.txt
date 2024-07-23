@@ -7,6 +7,7 @@ add_library (trading_api_common
     basic_order.cpp
     basic_context.cpp
     basic_exchange.cpp
+    basic_log.cpp
     memory_storage.cpp
     context_scheduler.cpp
     )

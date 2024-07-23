@@ -17,43 +17,34 @@ StrategyConfigSchema BinanceExchange::get_config_schema() const {
     };
 }
 
-WebSocketContext &BinanceExchange::get_ws_context() {
-    static WebSocketContext ctx;
-    return ctx;
-}
 
 void BinanceExchange::init(ExchangeContext context, const StrategyConfig &config) {
 
     auto [api_name, private_key, server] = config("api_name","private_key","server");
 
-    if (!!api_name && !!private_key) {
-        _key.emplace(api_name,private_key);
-    }
+    _key.api_key = api_name.as<std::string>();
+    _key.secret = private_key.as<std::string>();
     _ctx = std::move(context);
     _log = _ctx.get_log();
 
+    _ws_context.emplace();
+    _rest_context.emplace(*_ws_context, _log);
+
     std::string stype = server.get<std::string>("live");
     std::string fstreams;
-    std::string frpc;
-    std::string fresturl;
-    std::string dresturl;
+    std::string frest;
     if (stype == "testnet") {
-        frpc = "wss://testnet.binancefuture.com/ws-fapi/v1";
-        fresturl = "https://testnet.binancefuture..com/fapi";
-        dresturl = "https://testnet.binancefuture..com/dapi";
+        frest = "https://testnet.binancefuture.com/fapi";
         fstreams = "wss://fstream.binance.com/ws";
 
     } else {
-        frpc = "wss://ws-fapi.binance.com/ws-fapi/v1";
-        fresturl = "https://fapi.binance.com/fapi";
-        dresturl = "https://dapi.binance.com/dapi";
+        frest = "https://fapi.binance.com/fapi";
         fstreams = "wss://fstream.binance.com/ws";
     }
-    _public_fstream.emplace(*this, get_ws_context(), fstreams);
-    _rpc.emplace(get_ws_context(), frpc);
-    _instrument_def_cache._fapi_url = fresturl+"/v1/exchangeinfo";
-    _instrument_def_cache._dapi_url = dresturl+"/v1/exchangeinfo";
-    _instrument_def_cache._log = Log(_log, "Instrument cache");
+    _public_fstream.emplace(*this, *_ws_context, fstreams);
+    _frest.emplace(*_rest_context, frest, _key);
+    RPCClient::run_thread_auto_reconnect(*_public_fstream, 30000);
+
 }
 
 void BinanceExchange::subscribe(SubscriptionType type, const Instrument &i) {
@@ -91,6 +82,51 @@ void BinanceExchange::on_orderbook(std::string_view symbol, const OrderBook &upd
     }
 }
 
+void BinanceExchange::query_accounts(std::string_view query,
+        std::string_view label, Function<void(Account)> cb) {
+}
+
+BinanceExchange::Order BinanceExchange::create_order(
+        const Instrument &instrument, const trading_api::Account &account,
+        const Order::Setup &setup) {
+}
+
+void BinanceExchange::batch_place(std::span<Order> orders) {
+}
+
+void BinanceExchange::order_apply_fill(const Order &order,
+        const trading_api::Fill &fill) {
+}
+
+void BinanceExchange::update_account(const trading_api::Account &a) {
+}
+
+BinanceExchange::Order BinanceExchange::create_order_replace(
+        const Order &replace, const Order::Setup &setup, bool amend) {
+}
+
+std::string BinanceExchange::get_id() const {
+}
+
+std::optional<trading_api::IExchange::Icon> BinanceExchange::get_icon() const {
+}
+
+void BinanceExchange::batch_cancel(std::span<Order> orders) {
+}
+
+void BinanceExchange::update_instrument(const Instrument &i) {
+}
+
+void BinanceExchange::order_apply_report(const Order &order,
+        const Order::Report &report) {
+}
+
+std::string BinanceExchange::get_name() const {
+}
+
+void BinanceExchange::restore_orders(void *context,
+        std::span<trading_api::SerializedOrder> orders) {
+}
 
 void BinanceExchange::subscribe_result(std::string_view symbol,
         SubscriptionType type, const RPCClient::Result &result) {
@@ -111,60 +147,34 @@ void BinanceExchange::subscribe_result(std::string_view symbol,
 void BinanceExchange::query_instruments(std::string_view query,
         std::string_view label, Function<void(Instrument)> cb) {
 
+    _instruments.gc();
+    if (_instrument_def_cache.need_reload()) {
+        if (_instrument_def_cache.begin_reload(
+                [this, q = std::string(query),lbl = std::string(label), cb = std::move(cb)]() mutable {
+            query_instruments(q, lbl, std::move(cb));
+        })) {
+            _instrument_def_cache.reload(*_frest, false);
+        }
+        _instrument_def_cache.end_reload();
+        return;
+    }
+
+    auto ex = _ctx.get_exchange();
+    auto qr = _instrument_def_cache.query(query);
+    for (const auto &r: qr) {
+        auto bi = _instruments.create_if_not_exists<BinanceInstrument>(r.id, label, r, ex);
+        cb(Instrument(bi));
+
+    }
+
 }
 
 
-void BinanceExchange::InstrumentDefCache::reload() {
-    HttpClientRequest dapi_rq(get_ws_context(), _dapi_url);
-    HttpClientRequest fapi_rq(get_ws_context(), _fapi_url);
-    HttpClientRequest::Data data;
-    _expires = std::chrono::system_clock::now() + std::chrono::hours(1);
-    int status = fapi_rq.get_status_sync();
-    if (status != 200) {
-        _log.error("Failed to reload USDS-M : {}", status);
-    } else {
-        if (fapi_rq.read_body_sync(data, true) != HttpClientRequest::data) {
-            _log.error("Failed to reload USDS-M : timeout");
-        }
-        parse_instruments({data.data(), data.size()},false);
-    }
-    status = dapi_rq.get_status_sync();
-    if (status != 200) {
-        _log.error("Failed to reload COIN-M : {}", status);
-    } else {
-        if (fapi_rq.read_body_sync(data, true) != HttpClientRequest::data) {
-            _log.error("Failed to reload COIN-M : timeout");
-        }
-        parse_instruments({data.data(), data.size()}, true);
-    }
+void BinanceExchange::on_reconnect(std::string reason) {
+    _log.info("Reconnect. {}", reason);
+}
+void BinanceExchange::on_ping() {
+    _log.info("Ping/Keep alive");
 }
 
-void BinanceExchange::InstrumentDefCache::parse_instruments(std::string_view json_data, bool coinm) {
-    json::value jsdata = json::value::from_json(json_data);
-    std::vector<BinanceInstrument::Config> _new_cache;
-    for (json::value sd: jsdata["symbols"]) {
-        BinanceInstrument::Config cfg;
-        cfg.id = sd["symbol"].as<std::string>();
-        cfg.can_short = true;
-        cfg.type = coinm?Instrument::Type::inverted_contract:Instrument::Type::contract;
-        cfg.tradable = sd["status"].as<std::string_view>() == "TRADING";
-        for (auto f: sd["filters"]) {
-            std::string_view type = f["filterType"].get();
-            if (type == "PRICE_FILTER") {
-                cfg.tick_size = f["tickSize"].get();
-            } else if (type == "LOT_SIZE") {
-                cfg.min_size = f["minQty"].get();
-                cfg.lot_size = f["stepSize"].get();
-            }
-        }
-        cfg.min_volume = 0;
-        cfg.lot_multiplier = 1;
-        cfg.quantum_factor = 1;
-        cfg.quantity_precision = sd["quotePrecision"].get();
-        cfg.base_asset_precision = sd["baseAssetPrecision"].get();
-        cfg.quote_precision = sd["quotePrecision"].get();
-        cfg.quote_asset = sd["quoteAsset"].as<std::string>();
 
-        _new_cache.push_back(std::move(cfg));
-    }
-}

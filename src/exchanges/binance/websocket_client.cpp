@@ -21,6 +21,7 @@ public:
     }
 };
 
+
 class WebSocketContext::Callback {
 public:
     static int callback(lws *wsi, lws_callback_reasons reason, void *user, void *in, size_t len) {
@@ -44,12 +45,17 @@ public:
             case LWS_CALLBACK_CLIENT_HTTP_WRITEABLE:
                 if (!ev || !ev->on_writable()) return -1;
                 break;
+            case LWS_CALLBACK_TIMER:
+                if (ev) ev->on_timer();
+                break;
             case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
                 if (ev) {
                     std::string_view msg;
                     if (in != nullptr) msg = {reinterpret_cast<char*>(in), len};
                     else msg = "generic IO error";
                     ev->on_error(msg);
+                } else {
+                    return -1;
                 }
                 break;
             case LWS_CALLBACK_RECEIVE_CLIENT_HTTP:
@@ -60,6 +66,8 @@ public:
                     if (lws_http_client_read(wsi, &p, &l)) {
                         ev->on_error("Http read failed");
                     }
+                } else {
+                    return -1;
                 }
                 break;
             case LWS_CALLBACK_COMPLETED_CLIENT_HTTP:
@@ -114,6 +122,7 @@ WebSocketContext::~WebSocketContext() {
 void WebSocketContext::start() {
     if (!_started.exchange(true)) {
         thr = std::thread([&]{
+            pthread_setname_np(pthread_self(), "lws/IO");
             while (!_stopped) {
                 lws_service(context.get(), 100);
             }
@@ -344,6 +353,7 @@ static lws *do_connect(void *user, WebSocketContext &ctx, std::string_view url,
 WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url,
         std::string_view protocol, CustomHeaders headers)
 :_headers(std::move(headers))
+,_last_activity_time (std::chrono::system_clock::now())
 {
     try {
         _wsi = do_connect(this, ctx, url, protocol, nullptr);
@@ -358,6 +368,7 @@ WebSocketClient::WebSocketClient(WebSocketContext &ctx, std::string_view url,
 
 void WebSocketClient::on_established() {
     std::lock_guard _(_mx);
+    _last_activity_time = std::chrono::system_clock::now();
     lws_callback_on_writable(_wsi);
     _send_pending = false;
     _connecting = false;
@@ -366,6 +377,7 @@ void WebSocketClient::on_established() {
 
 void WebSocketClient::on_receive(std::string_view data) {
     std::lock_guard _(_mx);
+    _last_activity_time = std::chrono::system_clock::now();
     if (lws_is_first_fragment(_wsi)) {
         MsgType type = lws_frame_is_binary(_wsi)?MsgType::binary:MsgType::text;
         _recv_prealloc.set_content(type, data);
@@ -381,6 +393,7 @@ void WebSocketClient::on_receive(std::string_view data) {
 
 void WebSocketClient::on_error(std::string_view msg) {
     std::lock_guard _(_mx);
+    _last_activity_time = std::chrono::system_clock::now();
     _closed = true;
     _connecting = false;
     _last_error = std::string(msg);
@@ -519,6 +532,7 @@ void WebSocketClient::close() {
 
 void WebSocketClient::on_closed() {
     std::lock_guard _(_mx);
+    _last_activity_time = std::chrono::system_clock::now();
     _closed = true;
     if (_recv_el) _recv_el->signal(_recv_el_id);
 }
@@ -530,6 +544,7 @@ int WebSocketClient::get_pong_counter() {
 
 void WebSocketClient::on_pong() {
     std::lock_guard _(_mx);
+    _last_activity_time = std::chrono::system_clock::now();
     ++_pong_counter;
     if (_recv_el) _recv_el->signal(_recv_el_id);
 }
@@ -570,6 +585,7 @@ HttpClientRequest::HttpClientRequest(WebSocketContext &ctx, std::string_view url
 
 HttpClientRequest::HttpClientRequest(WebSocketContext &ctx, HttpMethod method, std::string_view url, std::string_view body, CustomHeaders hdrs )
 :_headers(std::move(hdrs)),_expect_body(method != HttpMethod::GET)
+,_last_activity_time (std::chrono::system_clock::now())
 {
     if (!body.empty()) {
         _request_body.resize(LWS_PRE);
@@ -658,6 +674,7 @@ void HttpClientRequest::on_closed() {
 
 bool HttpClientRequest::read_body(Data &data) {
     std::lock_guard _(_mx);
+    _last_activity_time = std::chrono::system_clock::now();
     data.clear();
     if (_response.empty()) {
         return _finished;
@@ -702,6 +719,39 @@ std::string_view HttpClientRequest::get_last_error() const {
     return _last_error;
 }
 
+std::chrono::system_clock::time_point WebSocketClient::get_last_activity() const {
+    std::lock_guard _(_mx);
+    return _last_activity_time;
+}
+
+std::chrono::system_clock::time_point HttpClientRequest::get_last_activity() const {
+    std::lock_guard _(_mx);
+    return _last_activity_time;
+}
+
+void HttpClientRequest::on_timer() {
+    std::lock_guard _(_mx);
+    if (_force_close) {
+        lws_set_wsi_user(_wsi, nullptr);
+        _finished = true;
+        _recv_el->signal(_recv_el_id);
+    }
+}
+
+HttpClientRequest::~HttpClientRequest() {
+    if (!is_finished()) {
+        WSEventListener lsn;
+        notify_data_available(lsn, 0);
+        {
+            std::lock_guard _(_mx);
+            _force_close = true;
+            lws_set_timer_usecs(_wsi, 0);
+        }
+        while (!is_finished()) {
+                lsn.wait();
+        }
+    }
+}
 /*
 int main() {
 

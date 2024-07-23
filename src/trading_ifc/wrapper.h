@@ -39,6 +39,7 @@ protected:
 };
 
 template<typename T>
-std::shared_ptr<const T> Wrapper<T>::null_instance_ptr = {&Wrapper<T>::null_instance, [](auto){}};
+std::shared_ptr<const T> Wrapper<T>::null_instance_ptr = std::shared_ptr<const T>(
+                &Wrapper<T>::null_instance, [](auto){});
 
 }

@@ -1,3 +1,4 @@
+#pragma once
 #include <algorithm>
 #include <condition_variable>
 #include <deque>
@@ -52,6 +53,7 @@ public:
         virtual bool on_writable() = 0;
         virtual void on_pong() = 0;
         virtual void on_add_custom_headers(const HeaderEmit &emit) = 0;
+        virtual void on_timer() = 0;
         virtual ~Events() = default;
     };
 
@@ -108,22 +110,14 @@ public:
      * @note you need to wait to update bitmask of ready clients
      */
     void wait() {
-        std::unique_lock lk(_mx);
-        _cond.wait(lk, [&]{return !_signals.empty();});
-        std::swap(_latch, _signals);
-        _signals.clear();
+        wait(std::unique_lock(_mx));
     }
     ///Wait for any signal
     /**
      * @note you need to wait to update bitmask of ready clients
      */
     bool wait_until(std::chrono::system_clock::time_point tp) {
-        std::unique_lock lk(_mx);
-        if (!_cond.wait_until(lk, tp, [&]{return !_signals.empty();})) return false;
-        std::swap(_latch, _signals);
-        _signals.clear();
-        return true;
-
+        return wait_until(std::unique_lock(_mx),tp);
     }
     ///Wait for any signal
     /**
@@ -140,6 +134,20 @@ protected:
     std::basic_string<std::uint16_t> _latch;
     std::mutex _mx;
     std::condition_variable _cond;
+
+    void wait(std::unique_lock<std::mutex> &&lk) {
+        _cond.wait(lk, [&]{return !_signals.empty();});
+        std::swap(_latch, _signals);
+        _signals.clear();
+    }
+
+    bool wait_until(std::unique_lock<std::mutex> &&lk, std::chrono::system_clock::time_point tp) {
+        if (!_cond.wait_until(lk, tp, [&]{return !_signals.empty();})) return false;
+        std::swap(_latch, _signals);
+        _signals.clear();
+        return true;
+
+    }
 };
 
 
@@ -444,6 +452,13 @@ public:
      */
     int get_pong_counter();
 
+    ///Retrieves time last downstream activity
+    /** This serves for timeout detection. When there is no
+     * activity for a certain period, connection is probably dead
+     * @return time point of last activitiy
+     */
+    std::chrono::system_clock::time_point get_last_activity() const;
+
 protected:
 
 
@@ -465,6 +480,7 @@ protected:
     WSEventListener::ClientID _send_el_id = 0; //< send event listener client id
     bool _send_ping = false;
     int _pong_counter = 0;
+    std::chrono::system_clock::time_point _last_activity_time = {};
 
     //internal send message (locked - check for pending flags)
     bool send_lk(SendMessage &msg);
@@ -484,7 +500,7 @@ protected:
     virtual void on_pong() override;
     virtual void on_http_established() override;
     virtual void on_add_custom_headers(const WebSocketContext::HeaderEmit &ctx) override;
-
+    virtual void on_timer() override {}
 
 };
 
@@ -517,6 +533,16 @@ enum class HttpMethod {
     PUT,
     DELETE
 };
+
+inline std::string_view to_string(HttpMethod type) {
+    switch (type) {
+        case HttpMethod::GET: return "GET";
+        case HttpMethod::POST: return "POST";
+        case HttpMethod::PUT: return "PUT";
+        case HttpMethod::DELETE: return "DELETE";
+        default: return "unknown";
+    }
+}
 
 
 
@@ -610,6 +636,16 @@ public:
      */
     std::string_view get_last_error() const;
 
+
+    ///Retrieves time last downstream activity
+    /** This serves for timeout detection. When there is no
+     * activity for a certain period, connection is probably dead
+     * @return time point of last activitiy
+     */
+    std::chrono::system_clock::time_point get_last_activity() const;
+
+    ~HttpClientRequest();
+
 protected:
     CustomHeaders _headers;
     struct lws *_wsi = nullptr;  //< connection handle
@@ -618,10 +654,12 @@ protected:
     WSEventListener *_recv_el = nullptr;
     WSEventListener::ClientID _recv_el_id = 0;
     bool _finished = false;
+    bool _force_close = false;
     int _status = -1;
     std::string _last_error;
     std::vector<char> _request_body;
     bool _expect_body = false;
+    std::chrono::system_clock::time_point _last_activity_time = {};
 
     virtual void on_pong() override;
     virtual void on_http_established() override;
@@ -631,6 +669,7 @@ protected:
     virtual void on_add_custom_headers(const WebSocketContext::HeaderEmit &emit) override;
     virtual bool on_writable() override;
     virtual void on_closed() override;
+    virtual void on_timer() override;
 
 
 

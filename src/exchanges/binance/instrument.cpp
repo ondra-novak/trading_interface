@@ -1,6 +1,6 @@
 #include "instrument.h"
 
-BinanceInstrument::BinanceInstrument(std::string label,
+BinanceInstrument::BinanceInstrument(std::string_view label,
         const Config &cfg,
         trading_api::Exchange x)
 :_label(std::move(label))
