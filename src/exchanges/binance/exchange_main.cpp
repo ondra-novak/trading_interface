@@ -43,20 +43,20 @@ void BinanceExchange::init(ExchangeContext context, const StrategyConfig &config
     }
     _public_fstream.emplace(*this, *_ws_context, fstreams);
     _frest.emplace(*_rest_context, frest, _key);
-    RPCClient::run_thread_auto_reconnect(*_public_fstream, 30000);
+    RPCClient::run_thread_auto_reconnect(*_public_fstream, 5, this);
 
 }
 
 void BinanceExchange::subscribe(SubscriptionType type, const Instrument &i) {
     auto id = i.get_id();
-    _log.debug("Request to subscribe: {}", id);
+    _log.trace("Request to subscribe: {}", id);
     _public_fstream->subscribe(type, id);
 }
 
 
 void BinanceExchange::unsubscribe(SubscriptionType type, const Instrument &i) {
     auto id = i.get_id();
-    _log.debug("Request to unsubscribe: {}", id);
+    _log.trace("Request to unsubscribe: {}", id);
     _public_fstream->unsubscribe(type, id);
 }
 
@@ -139,7 +139,7 @@ void BinanceExchange::subscribe_result(std::string_view symbol,
         }
         _log.warning("Failed to subscribe {} {} (will retry): {} ", type, symbol, error);
     } else {
-        _log.info("Subscribed {} {}", type, symbol);
+        _log.trace("Subscribed {} {}", type, symbol);
     }
 
 }
@@ -171,10 +171,11 @@ void BinanceExchange::query_instruments(std::string_view query,
 
 
 void BinanceExchange::on_reconnect(std::string reason) {
-    _log.info("Reconnect. {}", reason);
+    if (reason.empty()) reason = "Stalled";
+    _log.error("{} / Reconnect. ", reason);
 }
 void BinanceExchange::on_ping() {
-    _log.info("Ping/Keep alive");
+    _log.trace("Ping/Keep alive");
 }
 
 

@@ -30,17 +30,18 @@ void WSStreams::subscribe(SubscriptionType type, std::string_view symbol) {    ;
     subscribe(std::unique_lock(_mx),type, symbol);
 }
 void WSStreams::subscribe(std::unique_lock<std::mutex> &&lk,SubscriptionType type, std::string_view symbol) {
-    _subscrlist.insert(std::pair(type, std::string(symbol)));
-    auto id = call_lk("SUBSCRIBE", build_params(type, symbol));
-    attach_callback(lk, id, [this, type, symbol = std::string(symbol)](const Result &res) {
-        if (res.is_error) {
-            std::lock_guard _(_mx);
-            if (res.status != RPCClient::status_connection_lost) {
-                _subscrlist.erase(std::pair(type, symbol));
+    if (_subscrlist.insert(std::pair(type, std::string(symbol))).second) {
+        auto id = call_lk("SUBSCRIBE", build_params(type, symbol));
+        attach_callback(lk, id, [this, type, symbol = std::string(symbol)](const Result &res) {
+            if (res.is_error) {
+                std::lock_guard _(_mx);
+                if (res.status != RPCClient::status_connection_lost) {
+                    _subscrlist.erase(std::pair(type, symbol));
+                }
             }
-        }
-        _events.subscribe_result(symbol, type, res);
-    });
+            _events.subscribe_result(symbol, type, res);
+        });
+    }
 
 
 }
@@ -48,9 +49,12 @@ void WSStreams::unsubscribe(SubscriptionType type, std::string_view symbol) {
     unsubscribe(std::unique_lock(_mx),type, symbol);
 }
 void WSStreams::unsubscribe(std::unique_lock<std::mutex> &&lk,SubscriptionType type, std::string_view symbol) {
-    _subscrlist.erase(std::pair(type, std::string(symbol)));
-    auto id =call_lk("UNSUBSCRIBE", build_params(type, symbol));
-    attach_callback(lk, id, [](const Result &) {});
+    auto iter = _subscrlist.find(std::pair(type, std::string(symbol)));
+    if (iter != _subscrlist.end()) {
+        _subscrlist.erase(std::pair(type, std::string(symbol)));
+        auto id =call_lk("UNSUBSCRIBE", build_params(type, symbol));
+        attach_callback(lk, id, [](const Result &) {});
+    }
 
 }
 
