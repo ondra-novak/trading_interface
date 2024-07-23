@@ -22,6 +22,15 @@ public:
 
 int main() {
 
+    trading_api::MarketEvent mev;
+    mev.set<trading_api::OrderBook>();
+    mev >> [](trading_api::Ticker &tk) {
+        std::cout << "Is Ticker" << std::endl;
+    };
+    mev >> [](trading_api::OrderBook &odb) noexcept {
+        std::cout << "Is Orderbook" << std::endl;
+    };
+
     trading_api::Log log(std::make_shared<trading_api::BasicLog>(std::cout, trading_api::Log::Serverity::trace));
     auto context = std::make_shared<trading_api::BasicExchangeContext>("Binance",log);
 

@@ -145,6 +145,7 @@ public:
         return s;
     }
 
+
 protected:
 
 
@@ -155,9 +156,9 @@ protected:
         bool operator()(double a, double b) const {return a < b;}
     };
 
-    Timestamp _tp; //<snapshot time
-    WanderingTree<double, double, CmpBid> _bid_side;    //<bid side
-    WanderingTree<double, double, CmpAsk> _ask_side;    //<ask side
+    Timestamp _tp = {}; //<snapshot time
+    WanderingTree<double, double, CmpBid> _bid_side = {};    //<bid side
+    WanderingTree<double, double, CmpAsk> _ask_side = {};    //<ask side
 };
 
 

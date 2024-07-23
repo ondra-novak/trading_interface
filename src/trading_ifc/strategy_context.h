@@ -4,6 +4,7 @@
 #include "fill.h"
 #include "order.h"
 #include "ticker.h"
+#include "orderbook.h"
 #include "timer.h"
 #include "config.h"
 #include "log.h"
@@ -55,6 +56,52 @@ T deserialize_binary(std::string_view binary, const T &defval) {
 }
 
 
+using MarketEventBase = std::variant<std::monostate, Ticker, OrderBook>;
+
+namespace _details {
+
+
+template<typename T> struct DetectFnFirstArg;
+
+template<typename Obj, typename R, typename X, typename ... Args>
+auto detect_arg(R (Obj::*)(X, Args...)) -> X;
+template<typename Obj, typename R, typename X, typename ... Args>
+auto detect_arg(R (Obj::*)(X, Args...) const) -> X;
+
+
+template<typename Ret, typename X, typename ... Args>
+struct DetectFnFirstArg<Ret (*)(X, Args...)> {
+    using type = X;
+};
+template<typename T> struct DetectFnFirstArg {
+    using type = decltype(detect_arg(&T::operator()));
+};
+
+
+
+}
+
+
+class MarketEvent : public MarketEventBase {
+public:
+
+    template<typename T>
+    T &set() {
+        if (!std::holds_alternative<T>(*this))  {
+            this->template emplace<T>();
+        }
+        return std::get<T>(*this);
+    }
+
+
+    template<typename Fn>
+    void operator>>(Fn &&fn) {
+        using T = std::decay_t<typename _details::DetectFnFirstArg<std::decay_t<Fn> >::type>;
+        if (std::holds_alternative<T>(*this)) {
+            fn(std::get<T>(*this));
+        }
+    }
+};
 
 
 

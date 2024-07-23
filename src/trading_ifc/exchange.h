@@ -87,7 +87,7 @@ public:
      *
      */
 
-    bool get_last_ticker(const Instrument &instrument, Ticker &tk) {
+    bool get_last_ticker(const Instrument &instrument, Ticker &tk) const {
         return _ptr->get_last_ticker(instrument, tk);
     }
 
@@ -100,7 +100,7 @@ public:
      * @note this function is intended for internal use. You need to use
      * context to subscribe instrument's data stream
      */
-    bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb) {
+    bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb) const {
         return _ptr->get_last_orderbook(instrument, ordb);
     }
 };
