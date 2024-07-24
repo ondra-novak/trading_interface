@@ -15,20 +15,46 @@ public:
 
     virtual ~IExchangeService() = default;
 
+    ///Retrieve configuration schema for configuration needed to initialize the instance
+    /**
+     * this function can be called without init();
+     * @return configuration schema
+     */
+    virtual ConfigSchema get_exchange_config_schema() const = 0;
+
+    ///Retrieve configuration schema to configure api key fields
+    /**
+     * this function can be called without init()
+     * @return
+     */
+    virtual ConfigSchema get_api_key_config_schema() const = 0;
+
     ///Called to init exchange service
     /**
      * @param context exchange context
      * @param config optional configuration - probably you will need to pass
      * an API key through this
      */
-    virtual void init(ExchangeContext context, const StrategyConfig &config) = 0;
+    virtual void init(ExchangeContext context, const Config &exchange_config) = 0;
 
-    ///Retrieve configuration schema for configuration needed to initialize the instance
+
+    ///Add new api key.
     /**
-     * this function can be called without init();
-     * @return configuration schema
+     *
+     * @param name an unique name which identifies this api key for other calls
+     * @param api key configuration
+     * @note multiple calls of this function with same name changes the api key.
+
      */
-    virtual StrategyConfigSchema get_config_schema() const = 0;
+    virtual void set_api_key(std::string_view name, const Config &api_key_config) = 0;
+
+    ///Deletes api key
+    /**
+     * @param name name of api key
+     *
+     * @note accounts associated with current api key are no longer useable
+     */
+    virtual void unset_api_key(std::string_view name) = 0;
 
     ///Subscribe instrument
     /** Subscribe this object to market data for given instrument
@@ -102,7 +128,8 @@ public:
 
     ///Query for accounts
     /**
-     * @param query query string - this is exchange specific
+     * @param api_key_name identifier of registered api_key
+     * @param query query string - this is exchange specific.
      * @param label defines label for populated instruments. It also works
      *  as negative query, because causes removal of accounts populated under
      *  different label from the result To repopulate account under
@@ -113,7 +140,7 @@ public:
      *
      * @note function is asynchronous
      */
-    virtual void query_accounts(std::string_view query, std::string_view label, Function<void(Account)> cb) = 0;
+    virtual void query_accounts(std::string_view api_key_name, std::string_view query, std::string_view label, Function<void(Account)> cb) = 0;
 
     ///Get exchange human readable name
     virtual std::string get_name() const = 0;

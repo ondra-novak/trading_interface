@@ -2,7 +2,7 @@
 #include "../common/basic_order.h"
 namespace trading_api {
 
-StrategyConfigSchema SimExchange::get_config_schema() const {
+ConfigSchema SimExchange::get_exchange_config_schema() const {
     return {};
 }
 
@@ -12,7 +12,7 @@ Order SimExchange::create_order(const Instrument &instrument,
     return Order(std::make_shared<BasicOrder>(instrument, account, setup, Order::Origin::strategy));
 }
 
-void SimExchange::init(ExchangeContext context, const StrategyConfig &config) {
+void SimExchange::init(ExchangeContext context, const Config &config) {
     this->ctx = std::move(context);
 }
 
@@ -90,7 +90,7 @@ std::string SimExchange::get_name() const {
 }
 
 
-SimExchange::SimExchange(GlobalScheduler scheduler, Config config)
+SimExchange::SimExchange(GlobalScheduler scheduler, SimConfig config)
 :_scheduler(std::move(scheduler))
 {
     std::transform(config.accounts.begin(), config.accounts.end(),

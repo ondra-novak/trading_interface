@@ -14,6 +14,19 @@ void InstrumentDefCache::reload(RestClient &client, bool coinm) {
     });
 }
 
+
+std::optional<BinanceInstrument::Config> InstrumentDefCache::find(std::string_view symbol) const {
+    std::lock_guard _(_mx);
+    auto iter =std::lower_bound(_instruments.begin(), _instruments.end(),
+            BinanceInstrument::Config{.id = std::string(symbol)}, &sort_order);
+    if (iter != _instruments.end() && iter->id == symbol) {
+        return {*iter};
+    } else {
+        return {};
+    }
+
+}
+
 std::vector<BinanceInstrument::Config> InstrumentDefCache::query(std::string_view query_str) const {
     std::lock_guard _(_mx);
     if (query_str == "*") return _instruments;

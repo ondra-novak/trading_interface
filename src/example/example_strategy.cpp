@@ -7,7 +7,7 @@ using namespace trading_api;
 class Example: public AbstractStrategy {
 public:
     virtual void on_init(const Context &ctx) override;
-    virtual StrategyConfigSchema get_config_schema() const override;
+    virtual ConfigSchema get_config_schema() const override;
 protected:
     Context _context;
 };
@@ -25,7 +25,7 @@ void Example::on_init(const Context &ctx) {
 }
 
 
-StrategyConfigSchema Example::get_config_schema() const {
+ConfigSchema Example::get_config_schema() const {
     using namespace trading_api::params;
     return {
         Group("gr1",{

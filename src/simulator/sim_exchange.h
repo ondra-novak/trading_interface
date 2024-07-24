@@ -11,17 +11,17 @@ namespace trading_api {
 class SimExchange: public IExchangeService {
 public:
 
-    struct Config {
+    struct SimConfig {
         std::vector<Account> accounts;
         std::vector<Instrument> instruments;
     };
 
     using GlobalScheduler = std::function<void(Timestamp,std::function<void(Timestamp)>, const void *)>;
 
-    SimExchange(GlobalScheduler scheduler, Config config);
+    SimExchange(GlobalScheduler scheduler, SimConfig config);
 
-    virtual void init(ExchangeContext context, const StrategyConfig &config) override;
-    virtual StrategyConfigSchema get_config_schema() const override;
+    virtual void init(ExchangeContext context, const Config &config) override;
+    virtual ConfigSchema get_exchange_config_schema() const override;
     virtual Order create_order(const Instrument &instrument,
             const Account &account, const Order::Setup &setup) override;
     virtual void batch_cancel(std::span<Order> orders) override;

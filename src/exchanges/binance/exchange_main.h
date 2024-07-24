@@ -2,6 +2,7 @@
 
 #include "../../trading_ifc/exchange_service.h"
 #include "../../trading_ifc/weak_object_map.h"
+#include "../../trading_ifc/shared_lockable_ptr.h"
 
 #include "ws_streams.h"
 
@@ -9,6 +10,9 @@
 #include "instrument_def_cache.h"
 
 #include "rest_client.h"
+
+#include "account.h"
+
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -23,6 +27,8 @@ public:
     using Order = trading_api::Order;
     using Ticker = trading_api::TickData;
     using OrderBook = trading_api::OrderBook;
+    using ConfigSchema = trading_api::ConfigSchema;
+    using Config = trading_api::Config;
 
     /*
      * '<instrument_name>' - query single instrument
@@ -37,13 +43,12 @@ public:
      * 'USDT' - usdt account
      * 'USDC' - usdc account
      */
-    virtual void query_accounts(std::string_view query, std::string_view label, Function<void(Account)> cb) override ;
+    virtual void query_accounts(std::string_view api_key_name, std::string_view query, std::string_view label, Function<void(Account)> cb) override ;
 
 
-    virtual trading_api::StrategyConfigSchema get_config_schema() const
+    virtual ConfigSchema get_exchange_config_schema() const
             override;
-    virtual void init(trading_api::ExchangeContext context,
-            const trading_api::StrategyConfig &config) override;
+    virtual void init(trading_api::ExchangeContext context, const Config &config) override;
 
     virtual void subscribe(trading_api::SubscriptionType type,
             const Instrument &i) override;
@@ -70,13 +75,20 @@ public:
             const Order::Report &report) override;
     virtual std::string get_name() const override;
     virtual void restore_orders(void *context, std::span<trading_api::SerializedOrder>  orders) override;
-
+    virtual ConfigSchema get_api_key_config_schema() const override;
+    virtual void unset_api_key(std::string_view name) override;
+    virtual void set_api_key(std::string_view name,
+            const trading_api::Config &api_key_config) override;
 
 protected:
+    using IdentityList = std::unordered_map<std::string, PIdentity>;
+    using PIdentityList = shared_lockable_ptr<IdentityList>;
     using InstrumentMap = trading_api::WeakObjectMapWithLock<BinanceInstrument>;
+    using AccountMap = trading_api::WeakObjectMapWithLock<BinanceAccount>;
 
     trading_api::ExchangeContext _ctx;
-    RestClient::ApiCredents _key;
+    PIdentityList _identities;
+
 
     std::optional<WebSocketContext> _ws_context;
     std::optional<RestClientContext> _rest_context;
@@ -85,6 +97,7 @@ protected:
     trading_api::Log _log;
 
     InstrumentMap _instruments;
+    AccountMap _accounts;
 
 
 
@@ -98,5 +111,8 @@ protected:
     virtual void on_reconnect(std::string reason) override;
     virtual void on_ping() override;
 
+    PIdentity find_identity(const std::string &ident) const;
 
+    void update_account(const std::shared_ptr<BinanceAccount> &acc,
+            const json::value &asset_info, const json::value &positions);
 };

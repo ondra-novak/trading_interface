@@ -6,6 +6,9 @@
 
 thread_local bool RestClientContext::_worker_thread = false;
 
+const std::string_view user_agent = "C++ Binance adapter";
+
+
 void RestClientContext::start() {
     _thr = std::jthread([this](auto stp){worker(std::move(stp));});
 }
@@ -86,10 +89,9 @@ void RestClientContext::stop() {
 
 
 
-RestClient::RestClient(RestClientContext &ctx, std::string base_url, ApiCredents cred, unsigned int timeout_ms)
+RestClient::RestClient(RestClientContext &ctx, std::string base_url,  unsigned int timeout_ms)
 :_ctx(ctx)
 ,_base_url(std::move(base_url))
-,_credents(std::move(cred))
 ,_timeout_ms(timeout_ms)
 {
 }
@@ -197,7 +199,7 @@ std::int64_t RestClient::get_server_time() const {
 HttpClientRequest RestClient::FactoryPublic::operator ()(WebSocketContext &wsctx, Log &log) {
     std::string url = owner->build_query(params->begin(), params->end(), owner->_base_url, *cmd, "?");
     log.trace(">> Public : GET {}", url);
-    return HttpClientRequest(wsctx,std::move(url));
+    return HttpClientRequest(wsctx,std::move(url),{{"User-Agent", std::string(user_agent)}});
 }
 
 HttpClientRequest RestClient::FactorySigned::operator()(WebSocketContext &wsctx, Log &log) {
@@ -205,18 +207,17 @@ HttpClientRequest RestClient::FactorySigned::operator()(WebSocketContext &wsctx,
     return HttpClientRequest(wsctx,method,std::move(url),std::move(body),std::move(hdrs));
 }
 
-RestClient::FactorySigned RestClient::prepare_signed(HttpMethod method, std::string_view cmd, Params params)  const {
+RestClient::FactorySigned RestClient::prepare_signed(const Identity &ident, HttpMethod method, std::string_view cmd, Params params)  const {
     std::vector<ParamKV> p(params.begin(), params.end());
     const std::string_view timestamp_str = "timestamp";
     const std::string_view signature_str = "signature";
-    const std::string_view user_agent = "C++ Binance adapter";
     auto tm = get_server_time();
     p.push_back({timestamp_str, tm});
     std::string sign_msg = build_query(p.begin(),p.end());
     unsigned char md[100]; //should be enough (expected 32 bytes)
     unsigned int md_len =sizeof(md);
-    HMAC(EVP_sha256(), reinterpret_cast<const unsigned char *>(_credents.secret.data()),
-                _credents.secret.length(),
+    HMAC(EVP_sha256(), reinterpret_cast<const unsigned char *>(ident.secret.data()),
+                ident.secret.length(),
                 reinterpret_cast<const unsigned char *>(sign_msg.data()),
                 sign_msg.length()
                 , md, &md_len);
@@ -228,14 +229,14 @@ RestClient::FactorySigned RestClient::prepare_signed(HttpMethod method, std::str
 
     if (method == HttpMethod::GET) {
         return FactorySigned{method,build_query(p.begin(), p.end(), _base_url, cmd, "?"), {},
-            {{"X-MBX-APIKEY", _credents.api_key},
+            {{"X-MBX-APIKEY", ident.name},
              {"User-Agent", std::string(user_agent)}}
         };
     } else {
         std::string whole_url(_base_url);
         whole_url.append(cmd);
         return FactorySigned(method, whole_url, build_query(p.begin(),p.end()), {
-                    {"X-MBX-APIKEY", _credents.api_key},
+                    {"X-MBX-APIKEY", ident.name},
                     {"User-Agent", std::string(user_agent)},
                     {"Content-Type","application/x-www-form-urlencoded"}
         });

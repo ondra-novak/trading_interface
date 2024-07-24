@@ -26,7 +26,7 @@ public:
     virtual ~IStrategy() = default;
 
 
-    virtual StrategyConfigSchema get_config_schema() const = 0;
+    virtual ConfigSchema get_config_schema() const = 0;
 
 
     ///called on initialization
@@ -85,7 +85,7 @@ public:
 
 class AbstractStrategy: public IStrategy {
 public:
-    virtual StrategyConfigSchema get_config_schema() const override {
+    virtual ConfigSchema get_config_schema() const override {
         return {};
     }
 

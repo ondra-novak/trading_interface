@@ -14,19 +14,26 @@ public:
 
 
 
-    BinanceAccount(PIdentity ident, Exchange ex, std::string label);
+    BinanceAccount(std::string ident, std::string asset,  Exchange ex, std::string label);
 
     virtual Info get_info() const override;
     virtual std::string get_label() const override;
     virtual Exchange get_exchange() const override;
+    virtual Positions get_positions() const override;
 
 
+    std::string get_ident() const {return _ident;}
 
+    void update(Info info, Positions positions);
+
+    const std::string &get_asset() const {return _asset;}
 
 protected:
     mutable std::mutex  _mx;
-    PIdentity _ident;
-    std::string _label;
+    std::string _ident;
+    std::string _asset;
     Exchange _ex;
+    std::string _label;
     Info _info;
+    Positions _positions;
 };

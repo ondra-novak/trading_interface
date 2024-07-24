@@ -192,11 +192,11 @@ inline Group::~Group() {}
 
 }
 
-class StrategyConfigSchema {
+class ConfigSchema {
 public:
     std::vector<params::Control> controls;
 
-    StrategyConfigSchema(std::initializer_list<params::Control> controls)
+    ConfigSchema(std::initializer_list<params::Control> controls)
         :controls(controls.begin(), controls.end()) {}
 
 };

@@ -8,10 +8,12 @@ int main() {
     WebSocketContext wsctx;
     RestClientContext restctx(wsctx,log);
 
-    RestClient client(restctx, "https://testnet.binancefuture.com/fapi", {
-            "3cfa2991082a67c0d3e20318b172d6badc07c1169ace1d83dae410b43b34f8d5",
-            "13795a26cf2e407347d9a3a3c3283122f63cfe8dd3f214708e80c4cf002845bc"
-    }, 10000);
+    PIdentity ident = Identity::create({
+        "3cfa2991082a67c0d3e20318b172d6badc07c1169ace1d83dae410b43b34f8d5",
+        "13795a26cf2e407347d9a3a3c3283122f63cfe8dd3f214708e80c4cf002845bc"
+    });
+
+    RestClient client(restctx, "https://testnet.binancefuture.com/fapi", 10000);
 
     auto print_result = [](const RestClient::Result &res){
         std::cout << res.is_error() << std::endl;
@@ -22,7 +24,7 @@ int main() {
             {"symbol","BTCUSDT"},
             {"limit", 5}
     }, print_result);
-    client.signed_call(HttpMethod::GET, "/v2/account", {}, print_result);
+    client.signed_call(ident, HttpMethod::GET, "/v2/account", {}, print_result);
 
 
     std::cout << "Press enter to exit" << std::endl << std::cin.get();

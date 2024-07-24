@@ -6,7 +6,7 @@ using namespace trading_api;
 
 class ExampleExchange: public IExchangeService {
 public:
-    virtual StrategyConfigSchema get_config_schema() const
+    virtual ConfigSchema get_exchange_config_schema() const
             override {return {};}
     virtual Order create_order(
             const Instrument &,
@@ -14,8 +14,7 @@ public:
             const Order::Setup &) override {return {};}
     virtual void unsubscribe(SubscriptionType ,
             const Instrument &) override {}
-    virtual void init(ExchangeContext ,
-            const StrategyConfig &) override {}
+    virtual void init(ExchangeContext , const Config &) override {}
     virtual void order_apply_fill(const Order &,
             const Fill &) override {}
     virtual void update_account(const Account &) override {}
@@ -32,12 +31,19 @@ public:
     virtual void batch_cancel(std::span<Order> ) override {};
     virtual void restore_orders(void *, std::span<SerializedOrder> ) override {}
 
-    virtual void query_accounts(std::string_view , std::string_view ,
+    virtual void query_accounts(std::string_view, std::string_view , std::string_view ,
             Function<void(Account)> ) override {}
     virtual void query_instruments(std::string_view , std::string_view ,
             Function<void(Instrument)> ) override {}
+
+    virtual trading_api::ConfigSchema get_api_key_config_schema() const
+            override {return {};}
+    virtual void unset_api_key(std::string_view ) override {}
+    virtual void set_api_key(std::string_view ,
+            const trading_api::Config &) override {}
 };
 
 
 EXPORT_EXCHANGE(ExampleExchange);
+
 

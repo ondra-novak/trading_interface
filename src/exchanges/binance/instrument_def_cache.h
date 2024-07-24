@@ -32,6 +32,7 @@ public:
 
     void reload(RestClient &client, bool coinm);
     std::vector<BinanceInstrument::Config> query(std::string_view query_str) const;
+    std::optional<BinanceInstrument::Config> find(std::string_view symbol) const;
     bool empty() const {return _instruments.empty();}
 
     auto get_last_error() {

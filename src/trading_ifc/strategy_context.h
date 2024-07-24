@@ -74,7 +74,7 @@ public:
 
     virtual std::span<const Instrument> get_instruments() const = 0;
 
-    virtual const StrategyConfig &get_config() const = 0;
+    virtual const Config &get_config() const = 0;
 
     ///Retrieves current time
     virtual Timestamp get_event_time() const = 0;
@@ -163,7 +163,7 @@ public:
     [[noreturn]] void throw_error() const {throw std::runtime_error("Used uninitialized context");}
     virtual std::span<const Account> get_accounts() const  override {throw_error();};
     virtual std::span<const Instrument> get_instruments() const override {throw_error();};
-    virtual const StrategyConfig &get_config() const override {throw_error();};
+    virtual const Config &get_config() const override {throw_error();};
     virtual void set_timer(Timestamp , CompletionCB, TimerID ) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();}
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
@@ -202,7 +202,7 @@ public:
 
     std::span<const Instrument> get_instruments() const {return _ptr->get_instruments();}
 
-    const StrategyConfig &get_config() const {return _ptr->get_config();}
+    const Config &get_config() const {return _ptr->get_config();}
 
 
 

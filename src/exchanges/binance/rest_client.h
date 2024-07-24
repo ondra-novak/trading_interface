@@ -5,6 +5,7 @@
 #include <variant>
 #include <json20.h>
 
+#include "identity.h"
 #include <list>
 
 ///context for rest client
@@ -128,13 +129,6 @@ protected:
 class RestClient {
 public:
 
-    ///credentials for signed requests
-    struct ApiCredents {
-        ///api key id
-        std::string api_key;
-        ///api secret
-        std::string secret;
-    };
 
     ///constructs rest client
     /**
@@ -143,7 +137,7 @@ public:
      * @param cred credentials
      * @param timeout_ms timeout for all requests in milliseconds
      */
-    RestClient(RestClientContext &ctx, std::string base_url, ApiCredents cred, unsigned int timeout_ms = 10000);
+    RestClient(RestClientContext &ctx, std::string base_url, unsigned int timeout_ms = 10000);
 
     ///defines types of values in params
     using Value = std::variant<std::string_view,
@@ -189,8 +183,8 @@ public:
      * @param cb callback function which is called with result
      */
     template<std::invocable<const Result &> _Callback>
-    void signed_call(HttpMethod method, std::string_view cmd, Params params, _Callback &&cb) const {
-        _ctx.enqueue_request(prepare_signed(method, cmd, params),
+    void signed_call(const Identity &ident, HttpMethod method, std::string_view cmd, Params params, _Callback &&cb) const {
+        _ctx.enqueue_request(prepare_signed(ident, method, cmd, params),
               std::forward<_Callback>(cb), std::chrono::milliseconds(_timeout_ms));
     }
 
@@ -206,7 +200,6 @@ protected:
 
     RestClientContext &_ctx;
     std::string _base_url;
-    ApiCredents _credents;
     unsigned int _timeout_ms;
 
     struct FactoryPublic { // @suppress("Miss copy constructor or assignment operator")
@@ -224,7 +217,7 @@ protected:
         HttpClientRequest operator()(WebSocketContext &wsctx, Log &log);
     };
 
-    FactorySigned prepare_signed(HttpMethod method, std::string_view cmd, Params params) const;
+    FactorySigned prepare_signed(const Identity &ident, HttpMethod method, std::string_view cmd, Params params) const;
 
 
     template<typename Iter, typename ... Args>
