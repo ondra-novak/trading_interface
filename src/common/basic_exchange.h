@@ -148,7 +148,7 @@ public:
      * @retval false there is no last ticker stored
      */
 
-    virtual bool get_last_ticker(const Instrument &instrument, Ticker &tk) const override;
+    virtual bool get_last_ticker(const Instrument &instrument, TickData &tk) const override;
 
     ///Retrieve last orderbook state synchronously
     /**
@@ -257,7 +257,7 @@ protected:
         unlimited
     };
 
-    std::map<Instrument, Ticker> _tickers;
+    std::map<Instrument, TickData> _tickers;
     std::map<Instrument, OrderBook> _orderbooks;
     std::map<Subscription, SubscriptionLimit> _subscriptions;
     std::map<Instrument, std::vector<IEventTarget *> > _instrument_update_waiting;
@@ -270,7 +270,7 @@ protected:
      * @param i instrument
      * @param t ticker
      */
-    virtual void income_data(const Instrument &i, const Ticker &t) override;
+    virtual void income_data(const Instrument &i, const TickData &t) override;
     ///call this function when orderbook for given instrument arrived
     /**
      * @param i instrument

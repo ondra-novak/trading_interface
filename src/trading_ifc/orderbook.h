@@ -1,7 +1,9 @@
 #pragma once
+#include "common.h"
 #include "account.h"
-#include "ticker.h"
+#include "tickdata.h"
 #include "wandering_bst.h"
+
 namespace trading_api {
 
 
@@ -72,7 +74,7 @@ public:
     }
 
     ///update ticker's value from orderbook
-    void update_ticker(Ticker &tk) {
+    void update_ticker(TickData &tk) {
         auto ask_beg = _ask_side.begin();
         auto bid_beg = _bid_side.begin();
         if (ask_beg != _ask_side.end()) {
@@ -90,7 +92,7 @@ public:
      * This simulates orderbook, if only ticker is available
      * @param tk
      */
-    void update_from_ticker(const Ticker &tk) {
+    void update_from_ticker(const TickData &tk) {
         remove_ask_to(tk.ask);
         remove_bid_to(tk.bid);
         update_ask(tk.ask, tk.ask_volume);

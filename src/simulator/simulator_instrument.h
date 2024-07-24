@@ -32,11 +32,11 @@ public:
         _ticker.last = price;
     }
 
-    const Ticker& get_ticker() const {
+    const TickData& get_ticker() const {
         return _ticker;
     }
 
-    void set_ticker(const Ticker &ticker) {
+    void set_ticker(const TickData &ticker) {
         _ticker = ticker;
         _orderbook.update_from_ticker(ticker);
     }
@@ -44,7 +44,7 @@ public:
 protected:
     Config _cfg;
     std::string _id;
-    Ticker _ticker;
+    TickData _ticker;
     OrderBook _orderbook;
 
 };

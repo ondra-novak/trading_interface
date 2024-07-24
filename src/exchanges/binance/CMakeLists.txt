@@ -26,6 +26,7 @@ add_library(binance SHARED
     instrument.cpp
     rest_client.cpp
     instrument_def_cache.cpp
+    account.cpp
 )
 set_target_properties(binance PROPERTIES PREFIX "")
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cmath>
-#include "position.h"
 #include "exchange.h"
 
 namespace trading_api {
@@ -38,6 +37,22 @@ public:
         quantum_contract,
         ///cfd market / however hedge is disabled by default
         cfd
+    };
+
+    ///Structure defines information of this instrument for fills
+    /** This structure contains sufficient informations to aggregate position, trades and calculate PnL */
+    struct InstrumentFillInfo {
+        ///type of contract (to calculate PnL correcly)
+        IInstrument::Type type;
+        ///PnL multiplier (multiplier * amount * (close - open)
+        double multiplier;
+        ///instrument identifier (to aggregate fills of single instrument)
+        std::string instrument_id;
+        ///price unit (for example USD)
+        std::string price_unit;
+
+        bool operator==(const InstrumentFillInfo &info) const = default;
+
     };
 
 
@@ -87,6 +102,9 @@ public:
 
     virtual Exchange get_exchange() const = 0;
 
+    ///Retrieve instrument's fill information structure
+    /** This helps to identify which fills belongs to which instruments */
+    virtual InstrumentFillInfo get_fill_info() const = 0;
 
     class Null;
 };
@@ -104,6 +122,7 @@ public:
     virtual std::string get_label() const override {return {};}
     virtual std::string get_category() const override {return {};}
     virtual Exchange get_exchange() const override {return {};}
+    virtual InstrumentFillInfo get_fill_info() const override {return {};}
 
 
 };
@@ -215,17 +234,6 @@ public:
         return price_to_quotation(get_config(), price);
     }
 
-    ///calculates pnl
-    /**
-     *
-     * @param pos position reported from account (which is always in instrument
-     * realm)
-     * @param close_price close position (quotation price)
-     * @return pnl
-     */
-    double calculate_pnl(const Position &pos, double close_price) const {
-        return calculate_pnl(get_config(), pos, close_price);
-    }
     ///adjust price to nearest tick
     /**
      * @param price price
@@ -285,17 +293,6 @@ public:
             default: return price;
         }
     }
-    static double calculate_pnl(const Config &cfg, const Position &pos, double close_price) {
-        double amount = pos.amount * static_cast<int>(pos.side) * cfg.lot_multiplier;
-        switch (cfg.type) {
-            case Type::inverted_contract:
-                return amount * (1.0/pos.open_price - 1.0/close_price);
-            case Type::quantum_contract:
-                return amount * cfg.quantum_factor * (close_price - pos.open_price);
-            default:
-                return amount * (close_price - pos.open_price);
-        }
-    }
     static double adjust_price(const Instrument::Config &cfg, double price) {
         return std::max(std::round(price/cfg.tick_size)*cfg.tick_size, cfg.tick_size);
     }
@@ -337,22 +334,6 @@ public:
 
 
 
-///calculate pnl by type of instrument
-/**
- * @param cfg instrument config
- * @param pos position
- * @param close_price closing price
- * @return pnl in real money
- */
-inline double calculate_pnl(const Instrument::Config &cfg, const Position &pos, double close_price) {
-    switch (cfg.type) {
-        default: return pos.amount * static_cast<int>(pos.side) * cfg.lot_multiplier * (close_price - pos.open_price);
-        case Instrument::Type::inverted_contract:
-            return pos.amount * static_cast<int>(pos.side) * cfg.lot_multiplier * (1.0/pos.open_price - 1.0/close_price);
-        case Instrument::Type::quantum_contract:
-            return pos.amount * static_cast<int>(pos.side) * cfg.lot_multiplier * cfg.quantum_factor * (close_price - pos.open_price);
-    }
-}
 
 inline double price_instrument_to_strategy(const Instrument::Config &cfg, double price) {
     switch (cfg.type) {

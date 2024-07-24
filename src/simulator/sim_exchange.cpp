@@ -109,10 +109,10 @@ void SimExchange::on_timer(Timestamp tp) {
     if (_price_data.front().tp <= tp) {
         auto v = std::move(_price_data.front());
         _price_data.pop();
-        if (std::holds_alternative<Ticker>(v.data)) {
-            const auto &tk = std::get<Ticker>(v.data);
+        if (std::holds_alternative<TickData>(v.data)) {
+            const auto &tk = std::get<TickData>(v.data);
             ctx.income_data(v.i, tk);
-        } else if (std::holds_alternative<Ticker>(v.data)) {
+        } else if (std::holds_alternative<TickData>(v.data)) {
             const auto &up = std::get<OrderBook::Update>(v.data);
             OrderBook &ob = _orderbooks[v.i];
             ob.update(up);
@@ -133,7 +133,7 @@ void SimExchange::add_record(const Timestamp &tp, const Instrument &i, const Ord
     reschedule();
 }
 
-void SimExchange::add_record(const Timestamp &tp, const Instrument &i, const Ticker &tk) {
+void SimExchange::add_record(const Timestamp &tp, const Instrument &i, const TickData &tk) {
     _price_data.push({tp, i, tk});
     reschedule();
 }

@@ -4,7 +4,7 @@
 #include "../trading_ifc/instrument.h"
 #include "../trading_ifc/account.h"
 #include "../trading_ifc/orderbook.h"
-#include "../trading_ifc/ticker.h"
+#include "../trading_ifc/tickdata.h"
 #include "../trading_ifc/order.h"
 #include "../trading_ifc/fill.h"
 #include "../trading_ifc/function.h"

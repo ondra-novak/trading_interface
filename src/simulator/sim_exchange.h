@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../trading_ifc/exchange_service.h"
-#include "../trading_ifc/ticker.h"
+#include "../trading_ifc/tickdata.h"
 #include "../trading_ifc/orderbook.h"
 #include "../common/priority_queue.h"
 
@@ -44,7 +44,7 @@ public:
     virtual std::string get_name() const override;
 
 
-    void add_record(const Timestamp &tp, const Instrument &i, const Ticker &tk);
+    void add_record(const Timestamp &tp, const Instrument &i, const TickData &tk);
     void add_record(const Timestamp &tp, const Instrument &i, const OrderBook::Update &ordb);
 
 protected:
@@ -52,7 +52,7 @@ protected:
     struct Record {
         Timestamp tp;
         Instrument i;
-        std::variant<Ticker, OrderBook::Update> data;
+        std::variant<TickData, OrderBook::Update> data;
         struct ordering {
             bool operator()(const Record &a, const Record &b) const {
                 return a.tp > b.tp;

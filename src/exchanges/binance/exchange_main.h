@@ -21,7 +21,7 @@ public:
     using Instrument = trading_api::Instrument;
     using Account = trading_api::Account;
     using Order = trading_api::Order;
-    using Ticker = trading_api::Ticker;
+    using Ticker = trading_api::TickData;
     using OrderBook = trading_api::OrderBook;
 
     /*

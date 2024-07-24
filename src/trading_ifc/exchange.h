@@ -11,7 +11,7 @@
 namespace trading_api {
 
 class Instrument;
-struct Ticker;
+struct TickData;
 class OrderBook;
 
 
@@ -31,7 +31,7 @@ public:
     virtual std::string get_label() const = 0;
     virtual std::string get_name() const = 0;
     virtual std::optional<Icon> get_icon() const = 0;
-    virtual bool get_last_ticker(const Instrument &instrument, Ticker &tk) const = 0;
+    virtual bool get_last_ticker(const Instrument &instrument, TickData &tk) const = 0;
     virtual bool get_last_orderbook(const Instrument &instrument, OrderBook &ordb) const = 0;
     class Null;
 };
@@ -43,7 +43,7 @@ public:
     virtual std::string get_name() const override  {return {};}
     virtual std::string get_id() const override  {return {};}
     virtual std::optional<Icon> get_icon() const override {return {};}
-    virtual bool get_last_ticker(const Instrument &, Ticker &) const override {return false;}
+    virtual bool get_last_ticker(const Instrument &, TickData &) const override {return false;}
     virtual bool get_last_orderbook(const Instrument &, OrderBook &) const override {return false;}
 };
 
@@ -87,7 +87,7 @@ public:
      *
      */
 
-    bool get_last_ticker(const Instrument &instrument, Ticker &tk) const {
+    bool get_last_ticker(const Instrument &instrument, TickData &tk) const {
         return _ptr->get_last_ticker(instrument, tk);
     }
 

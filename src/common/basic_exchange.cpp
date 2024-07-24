@@ -29,7 +29,7 @@ void BasicExchangeContext::unsubscribe(IEventTarget *target, SubscriptionType sb
     _subscriptions.erase(s);
 }
 
-void BasicExchangeContext::income_data(const Instrument &i, const Ticker &t) {
+void BasicExchangeContext::income_data(const Instrument &i, const TickData &t) {
     std::lock_guard _(_mx);
     _tickers[i] = t;
     send_subscription_notify(i, SubscriptionType::ticker);
@@ -105,7 +105,7 @@ void BasicExchangeContext::send_subscription_notify(const Instrument &i, Subscri
     if (remain == 0) _ptr->unsubscribe(type, i);
 }
 
-bool BasicExchangeContext::get_last_ticker(const Instrument &instrument, Ticker &tk) const {
+bool BasicExchangeContext::get_last_ticker(const Instrument &instrument, TickData &tk) const {
     std::lock_guard _(_mx);
     auto iter = _tickers.find(instrument);
     if (iter == _tickers.end()) return false;

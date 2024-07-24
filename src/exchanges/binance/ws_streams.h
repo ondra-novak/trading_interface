@@ -2,7 +2,7 @@
 
 
 #include "../../trading_ifc/orderbook.h"
-#include "../../trading_ifc/ticker.h"
+#include "../../trading_ifc/tickdata.h"
 #include "rpc_client.h"
 
 #include <set>
@@ -15,7 +15,7 @@ public:
     class IEvents {
     public:
 
-        virtual void on_ticker(std::string_view symbol,  const trading_api::Ticker &ticker) = 0;
+        virtual void on_ticker(std::string_view symbol,  const trading_api::TickData &ticker) = 0;
         virtual void on_orderbook(std::string_view symbol,  const trading_api::OrderBook &update) = 0;
         virtual void subscribe_result(std::string_view symbol, SubscriptionType type, const Result &result) = 0;
         virtual ~IEvents() = default;
@@ -39,7 +39,7 @@ protected:
     using RPCClient::operator();
 
     struct InstrumentState {
-        trading_api::Ticker ticker = {};
+        trading_api::TickData ticker = {};
         trading_api::OrderBook orderbook = {};
     };
 

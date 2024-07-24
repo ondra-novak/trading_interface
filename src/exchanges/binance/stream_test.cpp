@@ -2,7 +2,7 @@
 
 class PrintEvents: public WSStreams::IEvents {
 public:
-    virtual void on_ticker(std::string_view symbol,  const trading_api::Ticker &ticker) override {
+    virtual void on_ticker(std::string_view symbol,  const trading_api::TickData &ticker) override {
         std::cout << symbol << ":" << ticker << std::endl;
     }
     virtual void on_orderbook(std::string_view symbol,  const trading_api::OrderBook &update) override {

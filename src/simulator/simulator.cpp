@@ -33,7 +33,7 @@ void SimulatorBackend::subscribe(IEventTarget *target, SubscriptionType sbstype,
     }
     if (std::find(t->begin(), t->end(), target) != t->end()) return;
     t->push_back(target);
-    if (st._last_ticker.has_value()) target->on_event(instrument, *st._last_ticker);
+    if (st._last_tickdata.has_value()) target->on_event(instrument, *st._last_ticker);
 }
 
 void SimulatorBackend::unsubscribe(IEventTarget *target, SubscriptionType sbstype, const Instrument &instrument) {
@@ -170,7 +170,7 @@ std::string SimulatorBackend::SimOrder::get_id() const {
 
 std::pair<double, double> SimulatorBackend::ticker_info(const Instrument &instrument, Side side) {
     InstrumentState &st = _instruments[instrument];
-    if (st._last_ticker.has_value()) {
+    if (st._last_tickdata.has_value()) {
         switch (side) {
             case Side::buy: return {st._last_ticker->ask, st._last_ticker->ask_volume};
             case Side::sell: return {st._last_ticker->bid, st._last_ticker->bid_volume};
@@ -335,7 +335,7 @@ SimulatorBackend::MarketExecState SimulatorBackend::try_market_order_spec(
 }
 
 void SimulatorBackend::send_market_event(Timestamp tp,
-        const Instrument &instrument, const Ticker &ticker,
+        const Instrument &instrument, const TickData &ticker,
         const Orderbook &orderbook) {
 
     InstrumentState &st = instrument[instrument];

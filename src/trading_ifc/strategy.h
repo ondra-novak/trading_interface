@@ -19,7 +19,6 @@ public:
     using InstrumentList = std::vector<Instrument>;
     using AccountList = std::vector<Account>;
 
-    using SignalNR = unsigned int;
 
     static constexpr unsigned int signal_configuration_changed  = 0;
 
@@ -33,19 +32,15 @@ public:
     ///called on initialization
     virtual void on_init(const Context &ctx) = 0;
 
-    ///called when ticker changes (market triggers)
+    ///called when market event happened
     /**
+     * You need to subscribe to given market event. See Context::subscribe
+     *
      * @param i instrument
      * @param tk ticker
      */
-    virtual void on_ticker(Instrument i, Ticker tk) = 0;
+    virtual void on_market_event(Instrument i, MarketEvent event) = 0;
 
-    ///called when orderbook update
-    /**
-     * @param i instrument
-     * @param ord orderbook
-     */
-    virtual void on_orderbook(Instrument i, OrderBook ord) = 0;
 
     ///called when time reached on a timer (set_timer)
     /**
@@ -75,9 +70,10 @@ public:
 
     ///called when external signal
     /**
-     * @param signalnr - signal number. There is predefined one signalnr = 0, when configuration changed
+     * @param signal - signal happened. The strategy must use signal.is<name>() test, what
+     * signal has been delivered. The signal can carry arguments
      */
-    virtual void on_signal(SignalNR signalnr) = 0;
+    virtual void on_signal(Signal signal) = 0;
 
     ///called when unhandled exception is detected anywhere in the strategy
     /**
@@ -94,12 +90,11 @@ public:
     }
 
     virtual void on_init(const Context &ctx) override = 0;
-    virtual void on_orderbook(Instrument, OrderBook ) override {}
+    virtual void on_market_event(Instrument , MarketEvent ) override {}
     virtual void on_timer(TimerID) override {};
-    virtual void on_ticker(Instrument, Ticker ) override {}
     virtual std::string on_fill(Order, const Fill &) override {return {};}
     virtual void on_order(Order) override {}
-    virtual void on_signal(SignalNR) override {}
+    virtual void on_signal(Signal) override {}
     virtual void on_unhandled_exception() override {throw;}
 };
 

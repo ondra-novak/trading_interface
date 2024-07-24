@@ -1,10 +1,10 @@
 #pragma once
 
+#include "common.h"
 #include "wrapper.h"
 #include <iterator>
 #include <bitset>
 
-#include <string_view>
 #include <vector>
 namespace trading_api {
 
@@ -47,28 +47,6 @@ public:
     virtual Serverity get_min_level() const override {return Serverity::disabled;}
 };
 
-template<typename T>
-concept is_container = requires(T x) {
-    {x.begin()}->std::input_iterator;
-    {x.end()}->std::input_iterator;
-    {x.begin() == x.end()};
-};
-
-template<typename T>
-concept is_pair = requires(T x) {
-    {x.first};
-    {x.second};
-};
-
-template<typename T>
-concept has_to_string_global = requires(T x) {
-    {to_string(x)}->std::convertible_to<std::string_view>;
-};
-
-template<typename T>
-concept can_output_to_ostream = requires(T x, std::ostream &stream) {
-    {stream << x};
-};
 
 template<typename T> constexpr bool const_false = false;
 

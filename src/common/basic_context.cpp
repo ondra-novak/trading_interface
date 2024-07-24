@@ -281,15 +281,15 @@ void BasicContext::EvUpdateAccount::operator ()() {
 
 void BasicContext::EvMarketData::operator ()() {
     if (ticker) {
-        Ticker tk;
+        TickData tk;
         if (i.get_exchange().get_last_ticker(i, tk)) {
-            me->_strategy->on_ticker(i, tk);
+            me->_strategy->on_market_event(i, tk);
         }
     }
     if (orderbook) {
         OrderBook ordb;
         if (i.get_exchange().get_last_orderbook(i, ordb)) {
-            me->_strategy->on_orderbook(i, ordb);
+            me->_strategy->on_market_event(i, ordb);
         }
     }
 }

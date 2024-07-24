@@ -37,6 +37,7 @@ public:
     virtual trading_api::Exchange get_exchange() const override;
     virtual std::string get_id() const override;
     const virtual trading_api::IInstrument::Config& get_config() const override;
+    virtual InstrumentFillInfo get_fill_info() const override;
 };
 
 

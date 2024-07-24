@@ -40,7 +40,7 @@ std::string SimulInstrument::get_label() const {
 
 
 double SimulInstrument::get_current_price(Side side) const {
-    const Ticker &tk = _base_instrument->get_ticker();
+    const TickData &tk = _base_instrument->get_ticker();
     switch (side) {
         case Side::buy: return tk.bid;
         case Side::sell: return tk.ask;

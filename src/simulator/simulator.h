@@ -45,7 +45,7 @@ public:
 
 
     void send_market_event(Timestamp tp, const BaseSimuInstrument &instrument,
-                    const Ticker &ticker, const Orderbook &orderbook);
+                    const TickData &ticker, const Orderbook &orderbook);
 
 protected:
     std::mutex _mx;
@@ -61,7 +61,7 @@ protected:
 
     struct InstrumentState {
         std::vector<PendingOrder> _active_orders;
-        Ticker _last_ticker;
+        TickData _last_ticker;
         OrderBook _orderbook;
         std::vector<IEventTarget *> _subscriptions_ticker;
         std::vector<IEventTarget *> _subscriptions_orderbook;

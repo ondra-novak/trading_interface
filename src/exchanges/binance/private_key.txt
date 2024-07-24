@@ -1,0 +1,6 @@
+    SecureRPCClient::Account red (
+            "129cyu8hOQJnf1rekAynLuFC4fHPOPKDERXWTofJ2lxsFjggjKnDpUaX37mCJ3WS",
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MC4CAQAwBQYDK2VwBCIEIDR2AD/A7J1n6EH6FGNxRARhByjggzC7yGlKJ0oG60JC\n"
+            "-----END PRIVATE KEY-----"
+    );

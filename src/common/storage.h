@@ -9,6 +9,7 @@ namespace trading_api {
 class IStorage {
 public:
 
+
     virtual ~IStorage() = default;
     ///begin transaction - all put or erase are now stored into single transaction
     virtual void begin_transaction() = 0;
@@ -53,6 +54,21 @@ public:
     virtual void enum_vars(std::string_view prefix,
             Function<void(std::string_view,std::string_view)> &fn) const = 0;
 
+    ///load positions
+    /**
+     * Positions are aggregated from fills
+     * @param filter filters positions by label
+     * @return list of active positions
+     */
+    virtual Positions load_positions(std::string_view filter = {} ) const = 0;
+    ///load closed trades
+    /**
+     * @param limit oldest timestamp
+     * @param filter if specified it only returns trades with given label
+     * @return trades
+     */
+    virtual Trades load_closed(Timestamp limit, std::string_view filter = {} ) const = 0;
+
 
     class Null;
 
@@ -76,6 +92,8 @@ public:
              Function<void(std::string_view,std::string_view)> &) const override {}
     virtual void enum_vars(std::string_view ,
             Function<void(std::string_view,std::string_view)> &) const override {}
+    virtual Positions load_positions(std::string_view ) const override {return {};}
+    virtual Trades load_closed(Timestamp , std::string_view ) const override {return {};}
 };
 
 

@@ -2,6 +2,7 @@
 
 #include "instrument.h"
 #include "account.h"
+#include "common.h"
 
 #include <memory>
 #include <variant>
@@ -220,8 +221,8 @@ public:
     };
     ///Close position order (CFD)
     struct ClosePosition {
-        PositionID pos_id;
-        ClosePosition(const Position &pos):pos_id(pos.id) {}
+        std::string pos_id;
+        ClosePosition(const std::string  &pos):pos_id(pos) {}
     };
 
     ///Transfer money from one account to other account

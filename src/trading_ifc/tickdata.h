@@ -8,7 +8,7 @@
 
 namespace trading_api {
 
-struct Ticker {
+struct TickData {
 
     //note - if bid and ask are not supported, then bid = ask = last
 
@@ -21,7 +21,7 @@ struct Ticker {
     double volume = 0;  //execution volume from last update - if unsupported = 0
     double index = 0;   //index price (if known) otherwise zero
 
-    friend std::ostream &operator << (std::ostream &s, const Ticker &tk) {
+    friend std::ostream &operator << (std::ostream &s, const TickData &tk) {
         s << tk.bid << '(' << tk.bid_volume << ") <-- " << tk.last << '(' << tk.volume << ')' << " --> " << tk.ask << '(' << tk.ask_volume << ')';
         return s;
     }

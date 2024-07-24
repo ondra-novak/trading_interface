@@ -11,7 +11,7 @@ public:
     virtual void on_event(const trading_api::Account &a) {}
     virtual void on_event(const trading_api::Instrument &i, trading_api::SubscriptionType subscription_type) {
         std::cout << i.get_id() << " ";
-        trading_api::Ticker tk;
+        trading_api::TickData tk;
         i.get_exchange().get_last_ticker(i, tk);
         std::cout << tk << std::endl;
     }
@@ -22,14 +22,9 @@ public:
 
 int main() {
 
-    trading_api::MarketEvent mev;
-    mev.set<trading_api::OrderBook>();
-    mev >> [](trading_api::Ticker &tk) {
-        std::cout << "Is Ticker" << std::endl;
-    };
-    mev >> [](trading_api::OrderBook &odb) noexcept {
-        std::cout << "Is Orderbook" << std::endl;
-    };
+    trading_api::TickData dt;
+    trading_api::MarketEvent ev(dt);
+    std::cout << ev << std::endl;
 
     trading_api::Log log(std::make_shared<trading_api::BasicLog>(std::cout, trading_api::Log::Serverity::trace));
     auto context = std::make_shared<trading_api::BasicExchangeContext>("Binance",log);

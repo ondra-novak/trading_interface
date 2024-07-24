@@ -21,7 +21,7 @@ public:
      * @param i instrument
      * @param t ticker
      */
-    virtual void income_data(const Instrument &i, const Ticker &t) = 0;
+    virtual void income_data(const Instrument &i, const TickData &t) = 0;
     ///call this function when orderbook for given instrument arrived
     /**
      * @param i instrument
@@ -76,7 +76,7 @@ public:
     virtual void income_data(const Instrument &, const OrderBook &) override{throw_error();}
     virtual void object_updated(const Account &) override{throw_error();}
     virtual void object_updated(const Instrument &) override{throw_error();}
-    virtual void income_data(const Instrument &, const Ticker &) override{throw_error();}
+    virtual void income_data(const Instrument &, const TickData &) override{throw_error();}
     virtual Log get_log() const override {throw_error();}
     virtual Exchange get_exchange() const override {throw_error();}
 };
@@ -98,7 +98,7 @@ public:
      * @param i instrument
      * @param t ticker
      */
-    void income_data(const Instrument &i, const Ticker &t) {
+    void income_data(const Instrument &i, const TickData &t) {
         _ptr->income_data(i, t);
     }
     ///call this function when orderbook for given instrument arrived
