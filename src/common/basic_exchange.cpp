@@ -6,7 +6,7 @@ BasicExchangeContext::BasicExchangeContext(std::string label, Log log)
             :_label(std::move(label))
             ,_log(std::move(log),"ex/{}",_label) {}
 
-void BasicExchangeContext::init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration) {
+void BasicExchangeContext::init(std::unique_ptr<IExchangeService> svc, Config configuration) {
     this->_ptr = std::move(svc);
     _ptr->init(this, configuration);
 }
@@ -86,9 +86,10 @@ void BasicExchangeContext::query_instruments(std::string_view query,
 
 }
 
-void BasicExchangeContext::query_accounts(std::string_view query,
+void BasicExchangeContext::query_accounts(std::string_view identity,
+        std::string_view query,
         std::string_view label, Function<void(Account)> cb) {
-    _ptr->query_accounts(query, label, std::move(cb));
+    _ptr->query_accounts(identity, query, label, std::move(cb));
 }
 
 void BasicExchangeContext::send_subscription_notify(const Instrument &i, SubscriptionType type) {
@@ -237,6 +238,14 @@ Exchange BasicExchangeContext::get_exchange() const {
 
 Log BasicExchangeContext::get_log() const {
     return _log;
+}
+
+void BasicExchangeContext::set_api_key(std::string_view name, const Config &api_key_config) {
+    _ptr->set_api_key(name, api_key_config);
+}
+
+void BasicExchangeContext::unset_api_key(std::string_view name) {
+    _ptr->unset_api_key(name);
 }
 
 }

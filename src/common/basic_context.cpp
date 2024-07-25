@@ -16,7 +16,7 @@ BasicContext::~BasicContext() {
 void BasicContext::init(std::unique_ptr<IStrategy> strategy,
         std::vector<Account> accounts,
         std::vector<Instrument> instruments,
-        StrategyConfig config) {
+        Config config) {
     _strategy = std::move(strategy);
     _accounts = std::move(accounts);
     _instruments = std::move(instruments);
@@ -323,7 +323,7 @@ std::span<const Instrument> BasicContext::get_instruments() const {
 }
 
 
-const StrategyConfig &BasicContext::get_config() const {
+const Config &BasicContext::get_config() const {
     return _config;
 }
 

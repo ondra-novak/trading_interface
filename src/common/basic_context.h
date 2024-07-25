@@ -50,7 +50,7 @@ public:
     void init(std::unique_ptr<IStrategy> strategy,
             std::vector<Account> accounts,
             std::vector<Instrument> instruments,
-            StrategyConfig config);
+            Config config);
 
     virtual void on_event(const Instrument &i) override;
     virtual void on_event(const Account &a) override;
@@ -81,7 +81,7 @@ public:
              Function<void(std::string_view,std::string_view)> &fn) const override;
     virtual void enum_vars(std::string_view prefix,
             Function<void(std::string_view,std::string_view)> &fn) const override;
-    virtual const StrategyConfig &get_config() const override;
+    virtual const Config &get_config() const override;
 
 protected:
 
@@ -91,7 +91,7 @@ protected:
     Log _logger;
     std::vector<Account> _accounts;
     std::vector<Instrument> _instruments;
-    StrategyConfig _config;
+    Config _config;
     Timestamp _event_time = Timestamp::min();
     Timestamp _scheduled_time = Timestamp::max();
 

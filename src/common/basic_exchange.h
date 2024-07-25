@@ -16,7 +16,11 @@ public:
     BasicExchangeContext(std::string label, Log log);
 
 
-    void init(std::unique_ptr<IExchangeService> svc, StrategyConfig configuration);
+    void init(std::unique_ptr<IExchangeService> svc, Config configuration);
+
+    void set_api_key(std::string_view name, const Config &api_key_config);
+
+    void unset_api_key(std::string_view name);
 
 
     ///Disconnect given event target
@@ -228,7 +232,7 @@ public:
      *
      * @note function is asynchronous
      */
-    void query_accounts(std::string_view query, std::string_view label, Function<void(Account)> cb);
+    void query_accounts(std::string_view identity, std::string_view query, std::string_view label, Function<void(Account)> cb);
 
 
     virtual Exchange get_exchange() const override;

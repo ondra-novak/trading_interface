@@ -83,7 +83,7 @@ public:
     ///Retrieve internal instrument ID
     virtual std::string get_id() const = 0;
 
-    virtual Positions get_positions() const = 0;
+    virtual Positions get_positions(const Instrument &i) const = 0;
 
 
     class Null;
@@ -96,7 +96,7 @@ public:
     virtual std::string get_label() const override {return {};}
     virtual Exchange get_exchange() const override {return {};}
     virtual std::string get_id() const override {return {};}
-    virtual Positions get_positions() const override {return {};}
+    virtual Positions get_positions(const Instrument &) const override {return {};}
 };
 
 
@@ -131,7 +131,7 @@ public:
 
     std::string get_id() const {return _ptr->get_id();}
 
-    Positions get_positions() const {return _ptr->get_positions();}
+    Positions get_positions(const Instrument &i) const {return _ptr->get_positions(i);}
 
 };
 

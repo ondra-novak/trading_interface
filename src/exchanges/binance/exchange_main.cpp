@@ -91,7 +91,7 @@ void BinanceExchange::query_accounts(std::string_view identity, std::string_view
 
     auto ident = find_identity(std::string(identity));
     if (ident) {
-        _frest->signed_call(*ident, HttpMethod::GET, "/v1/account", {},
+        _frest->signed_call(*ident, HttpMethod::GET, "/v2/account", {},
                 [this, ident = std::string(identity),
                        q = std::string(query),
                        l = std::string(label),
@@ -101,8 +101,9 @@ void BinanceExchange::query_accounts(std::string_view identity, std::string_view
                 auto data = result.content;
                 for (json::value_t a: data["assets"]) {
                     if (q.empty() || q == "*" || q == a["asset"].as<std::string_view>()) {}
-                    auto acc =_accounts.create_if_not_exists<BinanceAccount>(a["asset"].get(),
-                            ident, ex, l);
+                    std::string ass = a["asset"].get();
+                    auto acc =_accounts.create_if_not_exists<BinanceAccount>(
+                            ass,ass,ident, ex, l);
                     update_account(acc, a, data["positions"]);
                     cb(Account(acc));
                 }
@@ -114,37 +115,40 @@ void BinanceExchange::query_accounts(std::string_view identity, std::string_view
 void BinanceExchange::update_account(const std::shared_ptr<BinanceAccount> &acc,
         const json::value &asset_info, const json::value &positions) {
     Account::Info nfo;
-    nfo.balance = asset_info["marginBalance"].as<double>();
+    nfo.balance = asset_info["availableBalance"].as<double>()
+                    +asset_info["unrealizedProfit"].as<double>()
+                    +asset_info["positionInitialMargin"].as<double>()
+                    +asset_info["openOrderInitialMargin"].as<double>();
     nfo.blocked = asset_info["initialMargin"].as<double>();
     nfo.currency = acc->get_ident();
     nfo.equity = nfo.balance;
     nfo.leverage = 0;
     nfo.ratio = 0;
 
-    Account::Positions poslist;
+    BinanceAccount::PositionMap poslist;
 
     for (json::value pos: positions) {
         auto symbol = pos["symbol"].as<std::string_view>();
-        auto sinfo = _instrument_def_cache.find(symbol);
-        if (sinfo.has_value() && sinfo->quote_asset == nfo.currency) {
-            double lev = pos["leverage"].get();
-            double amn = pos["positionAmt"].get();
-            if (amn) {
+        auto instr = _instruments.find(symbol);
+        if (instr) {
+            auto snfo = instr->get_fill_info();
+            if (snfo.price_unit == nfo.currency) {
+                double amn = pos["positionAmt"].get();
                 Side side = amn<0?Side::sell:amn>0?Side::buy:Side::undefined;
-                IAccount::Position qpos;
-                //INSTRUMENT!!!!
-                qpos.amount = amn * static_cast<double>(side);
-                qpos.side = side;
-                qpos.id = pos["positionSide"].as<std::string>();
-                qpos.open_price =pos["entryPrice"].get();
-                qpos.leverage = lev;
-                poslist.push_back(std::move(qpos));
+                if (side != Side::undefined) {
+                    IAccount::Position qpos;
+                    qpos.amount = amn * static_cast<double>(side);
+                    qpos.side = side;
+                    qpos.id = pos["positionSide"].as<std::string>();
+                    qpos.open_price =pos["entryPrice"].get();
+                    qpos.leverage = pos["leverage"].get();
+                    nfo.leverage = std::max(nfo.leverage, qpos.leverage);
+                    poslist[Instrument(instr)].push_back(std::move(qpos));
+                }
             }
         }
     }
-
-
-
+    acc->update(std::move(nfo), std::move(poslist));
 }
 
 
@@ -243,7 +247,7 @@ void BinanceExchange::on_ping() {
 trading_api::ConfigSchema BinanceExchange::get_api_key_config_schema() const {
     return {
         params::TextInput("api_name", ""),
-        params::TextArea("private_key", 3, "", 1024)
+        params::TextArea("secret", 3, "", 1024)
     };
 }
 

@@ -87,7 +87,7 @@ protected:
     using AccountMap = trading_api::WeakObjectMapWithLock<BinanceAccount>;
 
     trading_api::ExchangeContext _ctx;
-    PIdentityList _identities;
+    PIdentityList _identities = make_shared_lockable<IdentityList>();
 
 
     std::optional<WebSocketContext> _ws_context;

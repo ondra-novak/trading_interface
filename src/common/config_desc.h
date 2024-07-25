@@ -6,7 +6,7 @@
 
 namespace trading_api {
 
-    json::value config_schema_to_json(const StrategyConfigSchema &desc);
+    json::value config_schema_to_json(const ConfigSchema &desc);
     json::value config_desc_to_json(const IStrategy *strategy);
 
 }

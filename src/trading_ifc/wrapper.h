@@ -21,7 +21,7 @@ public:
     std::strong_ordering operator<=>(const Wrapper<T> &other) const = default;
 
     struct Hasher {
-        auto operator()(const Wrapper &wrp) {
+        auto operator()(const Wrapper &wrp) const {
             std::hash<std::shared_ptr<const T> > hasher;
             return hasher(wrp._ptr);
         }

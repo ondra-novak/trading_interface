@@ -234,7 +234,7 @@ json::value config_schema_to_json_t(const std::vector<params::Control> &controls
 
 }
 
-json::value config_schema_to_json(const StrategyConfigSchema &desc) {
+json::value config_schema_to_json(const ConfigSchema &desc) {
     return config_schema_to_json_t<void>(desc.controls,0 );
 }
 

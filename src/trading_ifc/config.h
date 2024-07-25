@@ -54,7 +54,7 @@ public:
 
     Config(const std::vector<std::pair<std::string, Value> > &values) {
         for (const auto &[k,v]: values) {
-            _values[k] = &v;
+            _values[k] = v;
         }
     }
 
@@ -105,7 +105,7 @@ public:
     ValueRef operator[](std::string_view name) const {
         auto iter = _values.find(name);
         if (iter == _values.end()) return {nullptr};
-        else return {iter->second};
+        else return {&iter->second};
     }
 
 
@@ -116,7 +116,7 @@ public:
     }
 
 protected:
-    std::map<std::string_view, const Value *> _values;
+    std::map<std::string, Value ,std::less<>> _values;
 };
 
 

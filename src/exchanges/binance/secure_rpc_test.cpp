@@ -24,7 +24,7 @@ int main() {
             {"symbol","BTCUSDT"},
             {"limit", 5}
     }, print_result);
-    client.signed_call(ident, HttpMethod::GET, "/v2/account", {}, print_result);
+    client.signed_call(*ident, HttpMethod::GET, "/v2/account", {}, print_result);
 
 
     std::cout << "Press enter to exit" << std::endl << std::cin.get();

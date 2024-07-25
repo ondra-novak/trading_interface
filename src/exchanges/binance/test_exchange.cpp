@@ -29,11 +29,17 @@ int main() {
     trading_api::Log log(std::make_shared<trading_api::BasicLog>(std::cout, trading_api::Log::Serverity::trace));
     auto context = std::make_shared<trading_api::BasicExchangeContext>("Binance",log);
 
-    context->init(std::make_unique<BinanceExchange>(), trading_api::StrategyConfig({
+    trading_api::Config exchange_config ( {
+            {"server", std::string("testnet")}
+    });
+
+    trading_api::Config api_key ( {
             {"api_name",std::string("3cfa2991082a67c0d3e20318b172d6badc07c1169ace1d83dae410b43b34f8d5")},
-            {"private_key",std::string("13795a26cf2e407347d9a3a3c3283122f63cfe8dd3f214708e80c4cf002845bc")},
-            {"server",std::string("testnet")}
-    }));
+            {"secret",std::string("13795a26cf2e407347d9a3a3c3283122f63cfe8dd3f214708e80c4cf002845bc")},
+    });
+
+    context->init(std::make_unique<BinanceExchange>(), exchange_config);
+    context->set_api_key("master", api_key);
 
 
     trading_api::SharedState<std::vector<trading_api::Instrument> > state({},[](auto &res){
@@ -59,6 +65,27 @@ int main() {
 
     state.wait();
 
+    trading_api::SharedState<std::vector<trading_api::Account> > astate({},[](auto &res){
+        for (const trading_api::Account &acc: res) {
+            std::cout<<"Account:" << acc.get_id() << std::endl;
+            std::cout<<"Label:" << acc.get_label() << std::endl;
+            std::cout<<"Exchange:" << acc.get_exchange().get_label() << std::endl;
+            auto info = acc.get_info();
+            std::cout<<"Balance:" << info.balance << std::endl;
+            std::cout<<"Blocked:" << info.blocked<< std::endl;
+            std::cout<<"Currency:" << info.currency<< std::endl;
+            std::cout << "-----" << std::endl;
+        }
+    });
+
+    context->query_accounts("master", "*", "main", [&, astate](trading_api::Account acc){
+        std::lock_guard _(astate);
+        astate->push_back(acc);
+    });
+
+    astate.wait();
+
+
     trading_api::Instrument bitcoin;
 
     {
@@ -68,6 +95,7 @@ int main() {
         });
         state.wait();
     }
+
 
 
     EventTarget evt;
