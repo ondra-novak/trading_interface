@@ -30,7 +30,9 @@ concept SchedulerType = (std::is_invocable_v<Scheduler, Timestamp, Function<void
 
 
 
-class BasicContext: public IContext, public IEventTarget {
+class BasicContext: public IContext,
+                    public IEventTarget,
+                    public IErrorHandler{
 public:
 
     using GlobalScheduler = std::function<void(Timestamp,std::function<void(Timestamp)>, const void *)>;
@@ -82,7 +84,7 @@ public:
     virtual void enum_vars(std::string_view prefix,
             Function<void(std::string_view,std::string_view)> &fn) const override;
     virtual const Config &get_config() const override;
-
+    virtual void on_unhandled_exception()  override;
 protected:
 
     GlobalScheduler _scheduler;
@@ -132,13 +134,18 @@ protected:
         void operator()();
     };
 
+    struct EvException {
+        std::exception_ptr eptr;
+        void operator()();
+    };
 
     using QueueItem = std::variant<
             EvUpdateAccount,
             EvUpdateInstrument,
             EvOrderStatus,
             EvOrderFill,
-            EvMarketData>;
+            EvMarketData,
+            EvException>;
 
     struct TimerItem {
         Timestamp tp;
@@ -164,47 +171,14 @@ protected:
     std::multimap<Instrument, CompletionCB> _cb_update_instrument;
     std::map<Exchange, Batches> _exchanges;
 
-    void flush_batches();
+    void begin_transaction();
+    void commit();
+    void rollback();
     void notify_queue();
 
-    void on_scheduler(Timestamp tp) noexcept {
-        _event_time = tp;
-        _storage->begin_transaction();
-        try {
-            std::unique_lock lk(_queue_mx);
-
-            while (!_queue.empty()) {
-                lk.unlock();
-                std::visit([&](auto &item) {item();},_queue.front());
-                lk.lock();
-                _queue.pop_front();
-            }
-            while (!_timed_queue.empty() && _timed_queue.front().tp <= tp) {
-                    Function<void()> fn (std::move(_timed_queue.front().r));
-                    _timed_queue.pop();
-                    lk.unlock();
-                    fn();
-                    lk.lock();
-            }
-            if (!_timed_queue.empty()) {
-                _scheduled_time = _timed_queue.front().tp;
-                _scheduler(_scheduled_time, [this](auto tp){on_scheduler(tp);}, this);
-            } else {
-                _scheduled_time = Timestamp::max();
-            }
-        } catch (...) {
-            try {
-                _strategy->on_unhandled_exception();
-            } catch (...) {
-                _storage->rollback();
-                _logger.fatal("Unhandled exception in strategy{}", std::current_exception());
-            }
-        }
-        flush_batches();
-        _storage->commit();
-
-    }
-
+    void on_scheduler(Timestamp tp) noexcept;
+    template<std::invocable<> Fn>
+    void call_strategy(Fn &&strategy_fn);
 };
 
 

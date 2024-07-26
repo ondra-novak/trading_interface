@@ -152,6 +152,11 @@ public:
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
 
+    virtual void subscribe_channel(Channel channel_id) = 0;
+
+    virtual void unsubscribe_channel(Channel channel_id) = 0;
+
+
     virtual Log get_logger() const = 0;
 
 };

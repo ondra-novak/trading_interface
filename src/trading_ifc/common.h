@@ -106,6 +106,7 @@ inline Side reverse(Side side) {
     }
 }
 
-
+using Channel = std::string_view;
+using Message = std::string_view;
 
 }

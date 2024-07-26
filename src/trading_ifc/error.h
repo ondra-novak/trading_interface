@@ -73,7 +73,7 @@ protected:
 
 class IErrorHandler {
 public:
-    virtual void on_unhandled_exception() const = 0;
+    virtual void on_unhandled_exception()  = 0;
     virtual ~IErrorHandler() = default;
 };
 

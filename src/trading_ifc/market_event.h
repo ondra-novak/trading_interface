@@ -106,8 +106,4 @@ public:
     using AnyRef::AnyRef;
 };
 
-class Signal: public AnyRef {
-public:
-    using AnyRef::AnyRef;
-};
 }

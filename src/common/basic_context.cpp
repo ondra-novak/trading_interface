@@ -234,7 +234,12 @@ void BasicContext::update_instrument(const Instrument &i, CompletionCB complete_
 }
 
 
-void BasicContext::flush_batches() {
+void BasicContext::begin_transaction() {
+    _storage->begin_transaction();
+}
+
+void BasicContext::commit() {
+    _storage->commit();
     for (auto &[ex, batch]: _exchanges) {
         BasicExchangeContext &e = BasicExchangeContext::from_exchange(ex);
         if (!batch._batch_cancel.empty()) {
@@ -243,6 +248,18 @@ void BasicContext::flush_batches() {
         }
         if (!batch._batch_place.empty()) {
             e.batch_place(this, {batch._batch_place.begin(), batch._batch_place.end()});
+            batch._batch_place.clear();
+        }
+    }
+}
+
+void BasicContext::rollback() {
+    _storage->rollback();
+    for (auto &[ex, batch]: _exchanges) {
+        BasicExchangeContext &e = BasicExchangeContext::from_exchange(ex);
+        batch._batch_cancel.clear();
+        if (!batch._batch_place.empty()) {
+            e.batch_cancel({batch._batch_place.begin(), batch._batch_place.end()});
             batch._batch_place.clear();
         }
     }
@@ -337,4 +354,66 @@ void BasicContext::enum_vars(std::string_view prefix,
 
 }
 
+void BasicContext::on_unhandled_exception()  {
+    std::lock_guard _(_queue_mx);
+    _queue.push_back(EvException{std::current_exception()});
 }
+
+
+template<std::invocable<> Fn>
+void BasicContext::call_strategy(Fn &&strategy_fn) {
+    begin_transaction();
+    try {
+        strategy_fn();
+    } catch (...) {
+        try {
+            _strategy->on_unhandled_exception();
+        } catch (...) {
+            _storage->rollback();
+            _logger.fatal("Unhandled exception in strategy{}", std::current_exception());
+            return;
+        }
+    }
+    commit();
+
+
+}
+
+
+void BasicContext::on_scheduler(Timestamp tp) noexcept {
+    _event_time = tp;
+    ErrorGuard egr(this);
+    std::unique_lock lk(_queue_mx);
+
+    while (!_queue.empty()) {
+        lk.unlock();
+        std::visit([&](auto &item) {
+            call_strategy(item);
+        },_queue.front());
+        lk.lock();
+        _queue.pop_front();
+    }
+    while (!_timed_queue.empty() && _timed_queue.front().tp <= tp) {
+            Function<void()> fn (std::move(_timed_queue.front().r));
+            _timed_queue.pop();
+            lk.unlock();
+            call_strategy(fn);
+            lk.lock();
+    }
+    if (!_timed_queue.empty()) {
+        _scheduled_time = _timed_queue.front().tp;
+        _scheduler(_scheduled_time, [this](auto tp){on_scheduler(tp);}, this);
+    } else {
+        _scheduled_time = Timestamp::max();
+    }
+}
+
+void BasicContext::EvException::operator ()() {
+    std::rethrow_exception(eptr);
+}
+
+
+
+}
+
+

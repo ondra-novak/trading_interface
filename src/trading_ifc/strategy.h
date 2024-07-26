@@ -68,16 +68,34 @@ public:
      */
     virtual std::string on_fill(Order ord, const Fill &fill) = 0;
 
-    ///called when external signal
-    /**
-     * @param signal - signal happened. The strategy must use signal.is<name>() test, what
-     * signal has been delivered. The signal can carry arguments
-     */
-    virtual void on_signal(Signal signal) = 0;
 
-    ///called when unhandled exception is detected anywhere in the strategy
+    ///called when MQ message is received
     /**
-     * Default implementation throws exception back, so it is processed by control object
+     * @param channel channel on which the message was send. If the message
+     * is send to local mailbox, the variable is empty
+     * @param sender id of sender's mailbox, if the sender has mailbox (listening on
+     * its mailbox). Otherwise sender is empty
+     * @param message received message
+     *
+     * Channel messages are received with channel variable set, but sender can be empty
+     * (if sender is not empty, it exposes senders local mailbox)
+     * Requests sent on channel will have both channel and sender filled
+     * Responses typically has only sender, but not channel
+     */
+    virtual void on_mq_message(Channel channel, Channel sender, Message message) = 0;
+    ///called when unhandled exception is detected anywhere in the strategy code
+    /**
+     * This function is called even if the unhandled exception happened in
+     * a coroutine.
+     *
+     * The strategy can process an exception somehow, or rethrow the exception out of
+     * the function. If the exception is thrown out, it causes rollback of
+     * all orders and writes to the storage (serves as rollback of all)
+     *
+     * If the strategy exits function normally, transactions are commited as usual
+     *
+     * Default implementation rethrows, which rollbacks all changes
+     *
      */
     virtual void on_unhandled_exception() = 0;
 };
@@ -94,7 +112,6 @@ public:
     virtual void on_timer(TimerID) override {};
     virtual std::string on_fill(Order, const Fill &) override {return {};}
     virtual void on_order(Order) override {}
-    virtual void on_signal(Signal) override {}
     virtual void on_unhandled_exception() override {throw;}
 };
 
