@@ -1,7 +1,7 @@
 #include "exchange_main.h"
 #include "instrument.h"
-
 #include "identity.h"
+#include "../../trading_ifc/basic_order.h"
 
 
 using namespace trading_api;
@@ -155,9 +155,12 @@ void BinanceExchange::update_account(const std::shared_ptr<BinanceAccount> &acc,
 BinanceExchange::Order BinanceExchange::create_order(
         const Instrument &instrument, const trading_api::Account &account,
         const Order::Setup &setup) {
+    return Order(std::make_shared<trading_api::BasicOrder>(instrument,
+            account, setup, Order::Origin::strategy));
 }
 
 void BinanceExchange::batch_place(std::span<Order> orders) {
+
 }
 
 void BinanceExchange::order_apply_fill(const Order &order,
@@ -165,13 +168,46 @@ void BinanceExchange::order_apply_fill(const Order &order,
 }
 
 void BinanceExchange::update_account(const trading_api::Account &a) {
+    const BinanceAccount &ba = dynamic_cast<const BinanceAccount &>(*a.get_handle());
+    auto ident = find_identity(ba.get_ident());
+    if (ident) {
+
+        _frest->signed_call(*ident, HttpMethod::GET, "/v2/account", {},
+                [this, a](const RestClient::Result &result) mutable {
+
+            if (!result.is_error()) {
+                auto ba = std::const_pointer_cast<BinanceAccount>(
+                        std::static_pointer_cast<const BinanceAccount>(
+                                a.get_handle()
+                        ));
+
+                auto assets = result.content["assets"];
+                const std::string &asset = ba->get_asset();
+                auto iter = std::find_if(assets.begin(), assets.end(), [&](const json::value &v){
+                    return v["asset"].as<std::string_view>() == asset;
+                });
+                if (iter == assets.end()) {
+                    _ctx.object_updated(a,{AsyncStatus::gone});
+                    return;
+                }
+                update_account(ba,*iter, result.content["positions"]);
+                _ctx.object_updated(a, {});
+            }
+        });
+
+    } else{
+        _ctx.object_updated(a, {AsyncStatus::gone});
+    }
 }
 
 BinanceExchange::Order BinanceExchange::create_order_replace(
         const Order &replace, const Order::Setup &setup, bool amend) {
+    return Order(std::make_shared<BasicOrder>(replace,
+                    setup, amend, Order::Origin::strategy));
 }
 
 std::string BinanceExchange::get_id() const {
+    return "binance";
 }
 
 std::optional<trading_api::IExchange::Icon> BinanceExchange::get_icon() const {

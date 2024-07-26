@@ -1,6 +1,6 @@
 #include "basic_context.h"
+#include "../trading_ifc/basic_order.h"
 
-#include "basic_order.h"
 namespace trading_api {
 
 
@@ -78,18 +78,18 @@ void BasicContext::on_event(const Order &order, const Order::Report &report) {
 
 
 
-void BasicContext::on_event(const Instrument &i) {
+void BasicContext::on_event(const Instrument &i, AsyncStatus st) {
     std::lock_guard _(_queue_mx);
-    _queue.push_back(EvUpdateInstrument{this, i});
+    _queue.push_back(EvUpdateInstrument{this, i, std::move(st)});
     notify_queue();
 
 }
 
 
 
-void BasicContext::on_event(const Account &a) {
+void BasicContext::on_event(const Account &a, AsyncStatus st ) {
     std::lock_guard _(_queue_mx);
-    _queue.push_back(EvUpdateAccount{this, a});
+    _queue.push_back(EvUpdateAccount{this, a, std::move(st)});
     notify_queue();
 }
 
@@ -158,7 +158,7 @@ void BasicContext::cancel(const Order &order) {
 }
 
 
-void BasicContext::set_timer(Timestamp at, CompletionCB fnptr, TimerID id) {
+void BasicContext::set_timer(Timestamp at, TimerEventCB fnptr, TimerID id) {
 
     std::lock_guard _(_queue_mx);
 
@@ -265,7 +265,7 @@ void BasicContext::set_var(std::string_view var_name, std::string_view value) {
 void BasicContext::EvUpdateInstrument::operator ()() {
         auto rg = me->_cb_update_instrument.equal_range(i);
         while (rg.first != rg.second) {
-            rg.first->second();
+            rg.first->second(st);
             rg.first = me->_cb_update_instrument.erase(rg.first);
         }
 }
@@ -273,7 +273,7 @@ void BasicContext::EvUpdateInstrument::operator ()() {
 void BasicContext::EvUpdateAccount::operator ()() {
     auto rg = me->_cb_update_account.equal_range(a);
     while (rg.first != rg.second) {
-        rg.first->second();
+        rg.first->second(st);
         rg.first = me->_cb_update_account.erase(rg.first);
     }
 }

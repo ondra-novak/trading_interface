@@ -8,7 +8,8 @@
 #include "../trading_ifc/order.h"
 #include "../trading_ifc/fill.h"
 #include "../trading_ifc/function.h"
-#include "basic_order.h"
+#include "../trading_ifc/async.h"
+
 
 namespace trading_api {
 
@@ -36,7 +37,7 @@ public:
      * into execution queue. Don't call exchange object directly from the event. Do
      * not perform blocking operations in this event
      */
-    virtual void on_event(const Instrument &i) = 0;
+    virtual void on_event(const Instrument &i, AsyncStatus st) = 0;
 
     ///called when update on an account is finished
     /**
@@ -45,7 +46,7 @@ public:
      * into execution queue. Don't call exchange object directly from the event. Do
      * not perform blocking operations in this event
      */
-    virtual void on_event(const Account &a) = 0;
+    virtual void on_event(const Account &a, AsyncStatus st) = 0;
 
     ///called when subscription update
     /**

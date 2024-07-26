@@ -1,5 +1,5 @@
 #include "sim_exchange.h"
-#include "../common/basic_order.h"
+#include "../trading_ifc/basic_order.h"
 namespace trading_api {
 
 ConfigSchema SimExchange::get_exchange_config_schema() const {
@@ -22,7 +22,7 @@ void SimExchange::order_apply_fill(const Order &order, const Fill &fill) {
 }
 
 void SimExchange::update_account(const Account &a) {
-    ctx.object_updated(a);
+    ctx.object_updated(a, {});
 }
 
 Order SimExchange::create_order_replace(const Order &replace,
@@ -44,7 +44,7 @@ void SimExchange::subscribe(SubscriptionType , const Instrument &) {
 }
 
 void SimExchange::update_instrument(const Instrument &i) {
-    ctx.object_updated(i);
+    ctx.object_updated(i, {});
 }
 
 void SimExchange::unsubscribe(SubscriptionType , const Instrument &i) {

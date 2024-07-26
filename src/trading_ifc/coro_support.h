@@ -1,9 +1,11 @@
 #pragma once
 
+#include "async.h"
 #include <coroutine>
-#include "function.h"
+#include <optional>
 
 namespace trading_api {
+
 
 
 ///simple coroutine
@@ -17,12 +19,14 @@ public:
         static constexpr std::suspend_never final_suspend() noexcept {return {};}
         static constexpr void return_void() {}
         coroutine get_return_object() {return {};}
-        void unhandled_exception() {}
+        void unhandled_exception() {
+            ErrorGuard::handle_exception();
+        }
     };
+
 };
 
 
-using CompletionCB = Function<void()>;
 
 ///awaitable object
 class [[nodiscard]] completion_awaiter {
@@ -42,7 +46,12 @@ public:
         _h = h;
     }
     void await_resume() {
-        if (!_called) throw std::runtime_error("canceled");
+        if (!_status.has_value()) {
+            throw AsyncCallException(AsyncStatus::canceled);;
+        }
+        if (_status->get_status() != AsyncStatus::ok) {
+            throw AsyncCallException(*_status);
+        }
     }
 
 protected:
@@ -54,12 +63,14 @@ protected:
     };
 
     CompletionCB create_callback() {
-        return [me = std::unique_ptr<completion_awaiter, Resumer>(this)]{
-            me->_called = true;
+        return [me = std::unique_ptr<completion_awaiter, Resumer>(this)](AsyncStatus status){
+            me->_status.emplace(std::move(status));
         };
     }
 
-    bool _called = false;
+    std::optional<AsyncStatus> _status;
+
+
     std::coroutine_handle<> _h = {};
 };
 

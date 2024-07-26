@@ -7,8 +7,8 @@
 
 class EventTarget: public trading_api::IEventTarget {
 public:
-    virtual void on_event(const trading_api::Instrument &i) {}
-    virtual void on_event(const trading_api::Account &a) {}
+    virtual void on_event(const trading_api::Instrument &i,trading_api::AsyncStatus) {}
+    virtual void on_event(const trading_api::Account &a, trading_api::AsyncStatus) {}
     virtual void on_event(const trading_api::Instrument &i, trading_api::SubscriptionType subscription_type) {
         std::cout << i.get_id() << " ";
         trading_api::TickData tk;

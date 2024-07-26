@@ -14,8 +14,6 @@
 namespace trading_api {
 
 
-using CompletionCB = Function<void()>;
-
 
 template<typename T>
 concept BinarySerializable = (
@@ -80,7 +78,7 @@ public:
     virtual Timestamp get_event_time() const = 0;
 
     ///Sets time, which calls function wrapped into runnable object. It is still bound to strategy
-    virtual void set_timer(Timestamp at, CompletionCB fnptr = {}, TimerID id = 0) = 0;
+    virtual void set_timer(Timestamp at, TimerEventCB fnptr = {}, TimerID id = 0) = 0;
 
     ///Cancel timer
     virtual bool clear_timer(TimerID id) = 0;
@@ -164,7 +162,7 @@ public:
     virtual std::span<const Account> get_accounts() const  override {throw_error();};
     virtual std::span<const Instrument> get_instruments() const override {throw_error();};
     virtual const Config &get_config() const override {throw_error();};
-    virtual void set_timer(Timestamp , CompletionCB, TimerID ) override {throw_error();}
+    virtual void set_timer(Timestamp , TimerEventCB, TimerID ) override {throw_error();}
     virtual void cancel(const Order &) override {throw_error();}
     virtual Order replace(const Order &, const Order::Setup &, bool) override {throw_error();}
     virtual void update_instrument(const Instrument &, CompletionCB) override {throw_error();}
@@ -189,14 +187,15 @@ public:
 };
 
 
-template<typename PtrType>
-class ContextT {
+class Context {
 public:
 
-    static std::shared_ptr<IContext> null_context_ptr;
 
-    ContextT(PtrType ptr):_ptr(std::move(ptr)) {}
+    static constexpr NullContext null_context = {};
 
+    Context():_ptr(const_cast<IContext *>(static_cast<const IContext *>(&null_context))) {}
+
+    Context(IContext *ctx):_ptr(ctx) {}
 
     std::span<const Account> get_accounts() const {return _ptr->get_accounts();}
 
@@ -447,7 +446,10 @@ public:
      */
     completion_awaiter sleep_until(Timestamp &at, TimerID id = 0) {
         return [&](auto fn) {
-            _ptr->set_timer(at, std::move(fn), id);
+            _ptr->set_timer(at, [fn = std::move(fn)]{
+                AsyncStatus st;
+                  fn(st);
+            },id);
         };
     }
     ///sleep until timestamp reached - coroutines
@@ -458,9 +460,7 @@ public:
      */
     template<typename A, typename B>
     completion_awaiter sleep_for(std::chrono::duration<A, B> dur, TimerID id = 0) {
-        return [&](auto fn) {
-            _ptr->set_timer(get_event_time()+dur, std::move(fn), id);
-        };
+        return sleep_until(get_event_time()+dur);
     }
 
     ///Cancel timer
@@ -509,12 +509,12 @@ public:
     }
 
     ///Retrieve last fills
-    Fills get_fills(std::size_t limit, const Instrument &i = {}, const Account &a = {}) {
-        return _ptr->get_fills(limit, i, a);
+    Fills get_fills(std::size_t limit, std::string_view filter = {}) {
+        return _ptr->get_fills(limit, filter);
     }
 
-    Fills get_fills(Timestamp tp, const Instrument &i = {}, const Account &a = {}) {
-        return _ptr->get_fills(tp, i, a);
+    Fills get_fills(Timestamp tp, std::string_view filter = {}) {
+        return _ptr->get_fills(tp, filter);
     }
 
     ///allocate equity for current strategy
@@ -540,28 +540,10 @@ public:
      *
      */
     void subscribe(SubscriptionType type, const Instrument &i) {
-        _ptr->subscribe(type, i, std::chrono::seconds(0));
+        _ptr->subscribe(type, i);
     }
 
-    ///Subscribe market data
-    /**
-     * @param type type of subscription (ticker, orderbook)
-     * @param i instrument instance
-     * @param interval interval of generating market events. When this value is specified
-     * market events are generated in this specified interval regardless on, whether
-     * there were change in the event. Some exchanges cannot sent market events
-     * as a stream, so each event is actually full query on market state polled in
-     * specified interval. The service provider can adjust this interval to lowest
-     * allowed value (for example, exchanges where price is polled, you probably don't
-     * get interval under 1 minute)
-     *
-     * @note if called multiple times on single instrument, it only adjusts the
-     * interval.
-     */
-    template<typename A, typename B>
-    void subscribe(SubscriptionType type, const Instrument &i, std::chrono::duration<A,B> interval) {
-        _ptr->subscribe(type, i, std::chrono::duration_cast<TimeSpan>(interval));
-    }
+
 
     ///Unsubscribe market data
     /**
@@ -582,18 +564,9 @@ public:
 
 
 protected:
-    PtrType _ptr;
+    IContext *_ptr;
 };
 
-class Context : public ContextT<IContext *> {
-public:
-
-    static constexpr NullContext null_context = {};
-
-    using ContextT<IContext *>::ContextT;
-    Context():ContextT<IContext *>(const_cast<NullContext *>(&null_context)) {}
-
-};
 
 }
 

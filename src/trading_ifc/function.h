@@ -58,7 +58,8 @@ class Function_impl<RetVal(Args...), nx, reserved_space> {
         virtual ~Abstract() = default;
         ///call the function
         virtual RetVal call(Args && ... args) = 0;
-        ///move the function to different address
+        virtual RetVal call(Args && ... args) const = 0;
+///move the function to different address
         /**
          * @param address target address, unitialized, so the function must use placement
          * new to allocate the object. The space at the address is guaranteed to be large
@@ -83,6 +84,9 @@ class Function_impl<RetVal(Args...), nx, reserved_space> {
         virtual RetVal call(Args && ... args) override {
             return _fn(std::forward<Args>(args)...);
         }
+        virtual RetVal call(Args && ... args) const override {
+            return _fn(std::forward<Args>(args)...);
+        }
         virtual void move(void *address) override {
             //allocate at address and move
             new(address) WrapFnSmall(std::move(*this));
@@ -91,7 +95,7 @@ class Function_impl<RetVal(Args...), nx, reserved_space> {
 
     protected:
         //function is allocated directly in the object
-        Fn _fn;
+        mutable Fn _fn;
     };
 
     ///Large function wrapper
@@ -102,6 +106,9 @@ class Function_impl<RetVal(Args...), nx, reserved_space> {
         WrapFnLarge(Fun &&fn):_fn(std::make_unique<Fn>(std::forward<Fun>(fn))) {}
 
         virtual RetVal call(Args && ... args) override {
+            return (*_fn)(std::forward<Args>(args)...);
+        }
+        virtual RetVal call(Args && ... args) const override {
             return (*_fn)(std::forward<Args>(args)...);
         }
         virtual void move(void *address) override {
@@ -125,6 +132,10 @@ class Function_impl<RetVal(Args...), nx, reserved_space> {
         template<std::convertible_to<Fn> Fun>
         WrapFnPlacement(Fun &&fn, void *ptr):_fn(new(ptr) Fn(std::forward<Fun>(fn))) {}
 
+        virtual RetVal call(Args && ... args) const override {
+            return (*_fn)(std::forward<Args>(args)...);
+        }
+
         virtual RetVal call(Args && ... args) override {
             return (*_fn)(std::forward<Args>(args)...);
         }
@@ -143,6 +154,9 @@ class Function_impl<RetVal(Args...), nx, reserved_space> {
     ///Represents invalid function, which is not callable. Used as default value of the object
     class InvalidFn: public Abstract {
     public:
+        virtual RetVal call(Args &&... ) const override {
+            throw std::bad_function_call();
+        }
         virtual RetVal call(Args &&... ) override {
             throw std::bad_function_call();
         }
@@ -248,6 +262,11 @@ public:
 
     ///Call the function
     RetVal operator()(Args  ... args) noexcept(nx) {
+        return ref().call(std::forward<Args>(args)...);
+    }
+
+    ///Call the function
+    RetVal operator()(Args  ... args) const noexcept(nx)  {
         return ref().call(std::forward<Args>(args)...);
     }
 

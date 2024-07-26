@@ -3,6 +3,7 @@
 #include "config.h"
 #include "order.h"
 #include "fill.h"
+#include "async.h"
 
 #include "log.h"
 namespace trading_api {
@@ -29,9 +30,9 @@ public:
      */
     virtual void income_data(const Instrument &i, const OrderBook &o) = 0;
     ///call this function when account is updated
-    virtual void object_updated(const Account &i) = 0;
+    virtual void object_updated(const Account &i, AsyncStatus st) = 0;
     ///call this function when instrument is updated
-    virtual void object_updated(const Instrument &i) = 0;
+    virtual void object_updated(const Instrument &i, AsyncStatus st) = 0;
     ///call this function when order's state changed
     /**
      * As the orders are const, you cannot change state of the order directly. The
@@ -74,8 +75,8 @@ public:
     virtual void order_restore(void *, const Order &) override{throw_error();}
     virtual void order_fill(const Order &, const Fill &) override{throw_error();}
     virtual void income_data(const Instrument &, const OrderBook &) override{throw_error();}
-    virtual void object_updated(const Account &) override{throw_error();}
-    virtual void object_updated(const Instrument &) override{throw_error();}
+    virtual void object_updated(const Account &, AsyncStatus) override{throw_error();}
+    virtual void object_updated(const Instrument &, AsyncStatus) override{throw_error();}
     virtual void income_data(const Instrument &, const TickData &) override{throw_error();}
     virtual Log get_log() const override {throw_error();}
     virtual Exchange get_exchange() const override {throw_error();}
@@ -110,12 +111,12 @@ public:
         _ptr->income_data(i, o);
     }
     ///call this function when account is updated
-    void object_updated(const Account &a) {
-        _ptr->object_updated(a);
+    void object_updated(const Account &a, AsyncStatus st) {
+        _ptr->object_updated(a, std::move(st));
     }
     ///call this function when instrument is updated
-    void object_updated(const Instrument &i) {
-        _ptr->object_updated(i);
+    void object_updated(const Instrument &i, AsyncStatus st) {
+        _ptr->object_updated(i, std::move(st));
     }
     ///call this function when order's state changed
     /**

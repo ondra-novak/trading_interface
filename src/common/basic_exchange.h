@@ -261,12 +261,13 @@ protected:
         unlimited
     };
 
-    std::map<Instrument, TickData> _tickers;
-    std::map<Instrument, OrderBook> _orderbooks;
+    std::unordered_map<Instrument, TickData, Instrument::Hasher> _tickers;
+    std::unordered_map<Instrument, OrderBook, Instrument::Hasher> _orderbooks;
+    std::unordered_map<Order, IEventTarget *, Order::Hasher> _orders;
+
     std::map<Subscription, SubscriptionLimit> _subscriptions;
     std::map<Instrument, std::vector<IEventTarget *> > _instrument_update_waiting;
     std::map<Account, std::vector<IEventTarget *> > _account_update_waiting;
-    std::map<Order, IEventTarget *, std::less<> > _orders;
 
 
     ///call this function when ticker for given instrument arrived
@@ -282,9 +283,9 @@ protected:
      */
     virtual void income_data(const Instrument &i, const OrderBook &o) override;
     ///call this function when account is updated
-    virtual void object_updated(const Account &i) override;
+    virtual void object_updated(const Account &i, AsyncStatus st) override;
     ///call this function when instrument is updated
-    virtual void object_updated(const Instrument &i) override;
+    virtual void object_updated(const Instrument &i, AsyncStatus st) override;
     ///call this function when order's state changed
     /**
      * As the orders are const, you cannot change state of the order directly. The

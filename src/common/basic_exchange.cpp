@@ -154,20 +154,20 @@ void BasicExchangeContext::update_instrument(IEventTarget *target, const Instrum
     lst.push_back(target);
 }
 
-void BasicExchangeContext::object_updated(const Account &account) {
+void BasicExchangeContext::object_updated(const Account &account, AsyncStatus st) {
     std::lock_guard _(_mx);
     auto &lst = _account_update_waiting[account];
     for (auto x: lst) {
-        x->on_event(account);
+        x->on_event(account, st);
     }
     lst.clear();
 }
 
-void BasicExchangeContext::object_updated(const Instrument &instrument) {
+void BasicExchangeContext::object_updated(const Instrument &instrument, AsyncStatus st) {
     std::lock_guard _(_mx);
     auto &lst = _instrument_update_waiting[instrument];
     for (auto x: lst) {
-        x->on_event(instrument);
+        x->on_event(instrument, st);
     }
     lst.clear();
 }
