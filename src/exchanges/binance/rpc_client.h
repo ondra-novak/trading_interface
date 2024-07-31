@@ -171,9 +171,13 @@ public:
 
 
     auto get_last_activity() const {
-        _client.get_last_activity();
+        return _client.get_last_activity();
     }
 
+    ///Checks whether connection is stalled
+    bool check_stalled(unsigned int interval_sec) {
+        return _client.check_stalled(interval_sec);
+    }
 
     class IThreadMonitor {
     public:
@@ -191,6 +195,8 @@ public:
     template<std::derived_from<RPCClient> T>
     static void run_thread_auto_reconnect(T &x, unsigned int ping_interval = 30, IThreadMonitor *mon = nullptr);
 
+
+    const std::string &get_url() const {return _url;}
 protected:
 
     using CallbackType = Function<void(Result), sizeof(Result)>;

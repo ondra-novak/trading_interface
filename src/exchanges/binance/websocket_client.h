@@ -459,6 +459,20 @@ public:
      */
     std::chrono::system_clock::time_point get_last_activity() const;
 
+    ///Checks whether connection is stalled (transfer is stuck, no data comming)
+    /** 
+     * @param interval_sec defines interval in seconds after which the connection is
+     * considered stalled. If the connection is stalled, ping is send and connection
+     * waits another interval after which the function returns true
+     * @retval false connection is not stalled
+     * @retval true connection is considered stalled, ping was sent and not received in the interval
+     * 
+     * @note you need to call this function periodically, for example after some timer expires. The
+     * first call after interval ellapsed always returns false. But first call also sends a ping
+     * packet. Second call after interval can return true. Another ping is send
+     */
+    bool check_stalled(unsigned int interval_sec);
+
 protected:
 
 
@@ -480,6 +494,7 @@ protected:
     WSEventListener::ClientID _send_el_id = 0; //< send event listener client id
     bool _send_ping = false;
     int _pong_counter = 0;
+    bool _stalled = false;
     std::chrono::system_clock::time_point _last_activity_time = {};
 
     //internal send message (locked - check for pending flags)

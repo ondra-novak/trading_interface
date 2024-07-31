@@ -38,10 +38,20 @@ void BinanceExchange::init(ExchangeContext context, const Config &config) {
         frest = "https://fapi.binance.com/fapi";
         fstreams = "wss://fstream.binance.com/ws";
     }
-    _public_fstream.emplace(*this, *_ws_context, fstreams);
-    _frest.emplace(*_rest_context, frest);
-    RPCClient::run_thread_auto_reconnect(*_public_fstream, 5, this);
-
+    _public_fstream = std::make_unique<WSStreams>(*this, *_ws_context, fstreams);
+    _frest = std::make_unique<RestClient>(*_rest_context, frest);
+    _stream_map = std::make_unique<StreamMap>(trading_api::Log(_log, "STREAM"));
+    _stream_map->add_stream(_public_fstream.get());
+    _stream_wrk = std::jthread([this](std::stop_token stp){
+        auto exp = std::chrono::system_clock::now()+std::chrono::minutes(30);
+        std::stop_callback __cb(stp, [&]{
+            _stream_map->signal_exit();
+        });
+        while (!_stream_map->process_messages(exp)) {
+            refresh_listenkeys();
+            exp = std::chrono::system_clock::now()+std::chrono::minutes(30);
+        }
+    });
 }
 
 void BinanceExchange::subscribe(SubscriptionType type, const Instrument &i) {
@@ -83,7 +93,7 @@ PIdentity BinanceExchange::find_identity(const std::string &ident) const {
     auto idlk = _identities.lock();
     auto iter = idlk->find(ident);
     if (iter == idlk->end()) return {};
-    return iter->second;
+    return iter->second.api_key;
 }
 
 void BinanceExchange::query_accounts(std::string_view identity, std::string_view query,
@@ -151,6 +161,9 @@ void BinanceExchange::update_account(const std::shared_ptr<BinanceAccount> &acc,
     acc->update(std::move(nfo), std::move(poslist));
 }
 
+void BinanceExchange::refresh_listenkeys()
+{
+}
 
 BinanceExchange::Order BinanceExchange::create_order(
         const Instrument &instrument, const trading_api::Account &account,
@@ -288,15 +301,38 @@ trading_api::ConfigSchema BinanceExchange::get_api_key_config_schema() const {
 }
 
 void BinanceExchange::unset_api_key(std::string_view name) {
-    _identities.lock()->erase(std::string(name));
+    auto lki = _identities.lock();
+    auto iter = lki->find(name);
+    if (iter != lki->end()) {
+        _stream_map->remove_stream(iter->second._stream.get());
+        lki->erase(iter);
+    }
 }
 
 void BinanceExchange::set_api_key(std::string_view name,const trading_api::Config &api_key_config) {
+    WSEventListener lsn;
+    std::optional<RestClient::Result> res;
+
     auto [api_name, secret] = api_key_config("api_name","secret");
-
-
-
-    _identities.lock()->emplace(std::string(name), Identity::create({
-        api_name.as<std::string>(),
-        secret.as<std::string>()}));
+    PIdentity ident = Identity::create({api_name.as<std::string>(),secret.as<std::string>()});
+    _frest->signed_call(*ident, HttpMethod::POST,  "/v1/listenKey", {},[&](const RestClient::Result &r){
+        res = r;lsn.signal(0);
+    });
+    lsn.wait();
+    if (res->is_error()) {
+        throw std::runtime_error(res->content.to_json());
+    }
+    std::string_view listen_key = res->content["listenKey"].get();
+    auto url = _public_fstream->get_url();
+    url.append("/").append(listen_key);
+    _log.trace("Connecting user data stream: {}", url);
+    auto stream = std::make_unique<WSStreams>(*this, *_ws_context, url);
+    auto inst = stream.get();
+    auto lki = _identities.lock();
+    if (!lki->emplace(std::string(name), IdentityInfo{std::move(ident), std::move(stream)}).second) {
+        throw std::runtime_error("Already exists");
+    }
+    _stream_map->add_stream(inst);
 }
+
+

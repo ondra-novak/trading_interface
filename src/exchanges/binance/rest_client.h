@@ -223,13 +223,6 @@ protected:
     template<typename Iter, typename ... Args>
     static std::string build_query(Iter beg, Iter end, const Args & ... prefixes);
 
-    class AbstractWaitingForServerTime { // @suppress("Miss copy constructor or assignment operator")
-        virtual ~AbstractWaitingForServerTime() = default;
-        virtual void on_done() const noexcept = 0;
-        AbstractWaitingForServerTime *_nx = nullptr;
-    };
-
-
     mutable std::chrono::system_clock::duration _server_time_adjust = {};
     mutable std::atomic<int> _server_time_adjust_state = {-1};
 

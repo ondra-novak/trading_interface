@@ -100,11 +100,11 @@ int main() {
 
     EventTarget evt;
 
-    context->subscribe(&evt, trading_api::SubscriptionType::ticker, bitcoin);
+//    context->subscribe(&evt, trading_api::SubscriptionType::ticker, bitcoin);
 
     std::cout << std::cin.get();
 
-    context->disconnect(&evt);
+ //   context->disconnect(&evt);
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 

@@ -27,6 +27,8 @@ public:
     void subscribe(SubscriptionType type, std::string_view symbol);
     void unsubscribe(SubscriptionType type, std::string_view symbol);
 
+    
+
     void reconnect();
 
 

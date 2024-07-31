@@ -2,6 +2,7 @@
 #include "websocket_client.h"
 #include <libwebsockets.h>
 #include <numeric>
+#include <utility>
 
 class HeaderContext: public WebSocketContext::HeaderEmit{
 
@@ -102,7 +103,7 @@ WebSocketContext::WebSocketContext() {
     lws_context_creation_info context_info = {};
     lws_protocols protocols[2] = {
             {"default",&WebSocketContext::Callback::callback, 0, 0, 0, nullptr, 0},
-            {nullptr, nullptr, 0, 0,0,  nullptr, 0}
+            {nullptr, nullptr, 0, 0, 0,  nullptr, 0}
     };
     context_info.port = CONTEXT_PORT_NO_LISTEN;
     context_info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
@@ -237,6 +238,7 @@ void WebSocketClient::send_lk_2(SendMessage &msg) {
 
 bool WebSocketClient::receive(RecvMessage &msg) {
     std::lock_guard _(_mx);
+    _stalled = false;
     if (_recv_queue.empty()) {
         if (_closed) {
             msg.set_content(MsgType::close, {});
@@ -260,6 +262,16 @@ void WebSocketClient::RecvMessage::set_content(MsgType type, std::string_view da
     _type = type;
 }
 
+bool WebSocketClient::check_stalled(unsigned int interval_sec) {
+    std::lock_guard _(_mx);
+    auto now = std::chrono::system_clock::now();
+    auto expr = _last_activity_time+std::chrono::seconds(interval_sec);
+    if (expr >= now) return false;
+    _send_ping = true;
+    _last_activity_time = now;
+    lws_callback_on_writable(_wsi);
+    return std::exchange(_stalled, true);;
+}
 
 
 constexpr std::pair<std::string_view, std::pair<bool, bool> > protocol_prefix[] = {
@@ -545,6 +557,7 @@ int WebSocketClient::get_pong_counter() {
 void WebSocketClient::on_pong() {
     std::lock_guard _(_mx);
     _last_activity_time = std::chrono::system_clock::now();
+    _stalled = false;
     ++_pong_counter;
     if (_recv_el) _recv_el->signal(_recv_el_id);
 }

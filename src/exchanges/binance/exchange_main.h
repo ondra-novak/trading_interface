@@ -5,7 +5,7 @@
 #include "../../trading_ifc/shared_lockable_ptr.h"
 
 #include "ws_streams.h"
-
+#include "stream_map.h"
 #include "instrument.h"
 #include "instrument_def_cache.h"
 
@@ -81,7 +81,13 @@ public:
             const trading_api::Config &api_key_config) override;
 
 protected:
-    using IdentityList = std::unordered_map<std::string, PIdentity>;
+    
+    struct IdentityInfo {
+        PIdentity api_key;
+        std::unique_ptr<WSStreams> _stream;
+    };
+
+    using IdentityList = std::map<std::string, IdentityInfo, std::less<> >;
     using PIdentityList = shared_lockable_ptr<IdentityList>;
     using InstrumentMap = trading_api::WeakObjectMapWithLock<BinanceInstrument>;
     using AccountMap = trading_api::WeakObjectMapWithLock<BinanceAccount>;
@@ -92,9 +98,12 @@ protected:
 
     std::optional<WebSocketContext> _ws_context;
     std::optional<RestClientContext> _rest_context;
-    std::optional<WSStreams> _public_fstream;
-    std::optional<RestClient> _frest;
+    std::unique_ptr<WSStreams> _public_fstream;
+    std::unique_ptr<RestClient> _frest;
+    std::unique_ptr<StreamMap> _stream_map;
+    std::jthread _stream_wrk;
     trading_api::Log _log;
+
 
     InstrumentMap _instruments;
     AccountMap _accounts;
@@ -115,4 +124,8 @@ protected:
 
     void update_account(const std::shared_ptr<BinanceAccount> &acc,
             const json::value &asset_info, const json::value &positions);
+
+
+    void refresh_listenkeys();
+    
 };
