@@ -20,6 +20,7 @@ public:
     using AccountList = std::vector<Account>;
 
 
+
     static constexpr unsigned int signal_configuration_changed  = 0;
 
 
@@ -71,18 +72,9 @@ public:
 
     ///called when MQ message is received
     /**
-     * @param channel channel on which the message was send. If the message
-     * is send to local mailbox, the variable is empty
-     * @param sender id of sender's mailbox, if the sender has mailbox (listening on
-     * its mailbox). Otherwise sender is empty
-     * @param message received message
-     *
-     * Channel messages are received with channel variable set, but sender can be empty
-     * (if sender is not empty, it exposes senders local mailbox)
-     * Requests sent on channel will have both channel and sender filled
-     * Responses typically has only sender, but not channel
+     * To gain access to MQ, use IContext::get_mq_client()
      */
-    virtual void on_mq_message(Channel channel, Channel sender, Message message) = 0;
+    virtual void on_mq_message(MQClient::Message) = 0;
     ///called when unhandled exception is detected anywhere in the strategy code
     /**
      * This function is called even if the unhandled exception happened in
@@ -113,6 +105,7 @@ public:
     virtual std::string on_fill(Order, const Fill &) override {return {};}
     virtual void on_order(Order) override {}
     virtual void on_unhandled_exception() override {throw;}
+    virtual void on_mq_message(MQClient::Message) override {};
 };
 
 

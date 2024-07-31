@@ -9,50 +9,12 @@
 #include "config.h"
 #include "log.h"
 #include "market_event.h"
+#include "mq.h"
 #include <span>
 
 namespace trading_api {
 
 
-
-template<typename T>
-concept BinarySerializable = (
-            (std::is_trivially_copy_constructible_v<T> && std::is_standard_layout_v<T>)
-            || (std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>));
-
-
-template<BinarySerializable T>
-std::string_view serialize_binary(const T &data) {
-    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
-        return std::string_view(data);
-    } else {
-        return std::string_view(reinterpret_cast<const char *>(&data), sizeof(data));
-    }
-}
-
-template<BinarySerializable T>
-std::optional<T> deserialize_binary(std::string_view binary) {
-    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
-        return T(binary);
-    } else {
-        std::optional<T> ret;
-        if (binary.size() == sizeof(T)) {
-            ret.emplace(*reinterpret_cast<const T *>(binary.data()));
-        }
-        return ret;
-    }
-}
-
-template<BinarySerializable T>
-T deserialize_binary(std::string_view binary, const T &defval) {
-    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
-        return T(binary);
-    } else if (sizeof(T) != binary.size()) {
-        return defval;
-    } else {
-        return T(*reinterpret_cast<const T *>(binary.data()));
-    }
-}
 
 
 
@@ -152,9 +114,9 @@ public:
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
 
-    virtual void subscribe_channel(Channel channel_id) = 0;
+    virtual MQClient get_mq_client() = 0;
 
-    virtual void unsubscribe_channel(Channel channel_id) = 0;
+    
 
 
     virtual Log get_logger() const = 0;
@@ -187,6 +149,7 @@ public:
     virtual void enum_vars(std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override {throw_error();}
     virtual void enum_vars(std::string_view , std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override  {throw_error();}
     virtual Log get_logger() const override {throw_error();}
+    virtual MQClient get_mq_client() override {throw_error();};
     constexpr virtual ~NullContext() {}
 
 };
@@ -465,7 +428,7 @@ public:
      */
     template<typename A, typename B>
     completion_awaiter sleep_for(std::chrono::duration<A, B> dur, TimerID id = 0) {
-        return sleep_until(get_event_time()+dur);
+        return sleep_until(get_event_time()+dur, id);
     }
 
     ///Cancel timer
@@ -567,6 +530,9 @@ public:
     ///Retrieve logger object (for logging and output)
     Log get_logger() {return _ptr->get_logger();}
 
+    MQClient get_mq_client() {
+        return _ptr->get_mq_client();
+    }
 
 protected:
     IContext *_ptr;

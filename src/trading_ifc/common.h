@@ -5,18 +5,21 @@
 #include <iostream>
 #include <string_view>
 #include <source_location>
+#include <optional>
+#include <variant>
+#include <tuple>
 
 namespace trading_api {
 
 template<typename T>
 concept is_container = requires(T x) {
-    {x.begin()}->std::input_iterator;
-    {x.end()}->std::input_iterator;
+    {x.begin()}->std::forward_iterator;
+    {x.end()}->std::forward_iterator;
     {x.begin() == x.end()};
 };
 
 template<typename T>
-concept is_pair = requires(T x) {
+concept is_pair_type = requires(T x) {
     {x.first};
     {x.second};
 };
@@ -31,6 +34,27 @@ template<typename T>
 concept can_output_to_ostream = requires(T x, std::ostream &stream) {
     {stream << x};
 };
+template<typename T>
+concept is_variant_type = requires(T x) {
+    {x.index()}->std::same_as<std::size_t>;
+    {x.valueless_by_exception()}->std::same_as<bool>;
+    {std::visit([](auto){}, x)};
+};
+
+template<typename T>
+concept is_optional_type = requires(const T x) {
+    {x.has_value()}->std::same_as<bool>;
+    {*x}->std::same_as<const typename T::value_type &>;
+};
+
+template<typename T>
+concept is_tuple_type = requires(const T x) {
+    typename std::tuple_size<T>;
+    {std::get<0>(x)};
+};
+
+
+
 
 namespace _details {
 
@@ -90,6 +114,8 @@ namespace _details {
 template<typename T>
 constexpr std::string_view type_to_string = _details::ClassName<T>();
 
+template<typename T>
+constexpr bool assert_error = false; 
 
 
 enum class Side {
@@ -106,7 +132,44 @@ inline Side reverse(Side side) {
     }
 }
 
-using Channel = std::string_view;
-using Message = std::string_view;
+template<typename T>
+concept BinarySerializable = (
+            (std::is_trivially_copy_constructible_v<T> && std::is_standard_layout_v<T>)
+            || (std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>));
+
+
+template<BinarySerializable T>
+std::string_view serialize_binary(const T &data) {
+    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
+        return std::string_view(data);
+    } else {
+        return std::string_view(reinterpret_cast<const char *>(&data), sizeof(data));
+    }
+}
+
+template<BinarySerializable T>
+std::optional<T> deserialize_binary(std::string_view binary) {
+    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
+        return T(binary);
+    } else {
+        std::optional<T> ret;
+        if (binary.size() == sizeof(T)) {
+            ret.emplace(*reinterpret_cast<const T *>(binary.data()));
+        }
+        return ret;
+    }
+}
+
+template<BinarySerializable T>
+T deserialize_binary(std::string_view binary, const T &defval) {
+    if constexpr(std::is_constructible_v<T, std::string_view> && std::is_convertible_v<T, std::string_view>) {
+        return T(binary);
+    } else if (sizeof(T) != binary.size()) {
+        return defval;
+    } else {
+        return T(*reinterpret_cast<const T *>(binary.data()));
+    }
+}
+
 
 }

@@ -32,7 +32,8 @@ concept SchedulerType = (std::is_invocable_v<Scheduler, Timestamp, Function<void
 
 class BasicContext: public IContext,
                     public IEventTarget,
-                    public IErrorHandler{
+                    public IErrorHandler,
+                    public IMQBroker::IListener{
 public:
 
     using GlobalScheduler = std::function<void(Timestamp,std::function<void(Timestamp)>, const void *)>;
@@ -84,6 +85,7 @@ public:
     virtual void enum_vars(std::string_view prefix,
             Function<void(std::string_view,std::string_view)> &fn) const override;
     virtual const Config &get_config() const override;
+    virtual void on_message(MQClient::Message message) override;
     virtual void on_unhandled_exception()  override;
 protected:
 
@@ -139,13 +141,21 @@ protected:
         void operator()();
     };
 
+    struct EvMQ {
+        BasicContext *me;
+        MQBroker::Message msg;
+        void operator()();
+    };
+
     using QueueItem = std::variant<
             EvUpdateAccount,
             EvUpdateInstrument,
             EvOrderStatus,
             EvOrderFill,
             EvMarketData,
-            EvException>;
+            EvException,
+            EvMQ
+            >;
 
     struct TimerItem {
         Timestamp tp;

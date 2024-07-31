@@ -412,6 +412,13 @@ void BasicContext::EvException::operator ()() {
     std::rethrow_exception(eptr);
 }
 
+void BasicContext::EvMQ::operator()() {
+    me->_strategy->on_mq_message(std::move(msg));
+}
+void BasicContext::on_message(MQClient::Message message) {
+    std::lock_guard _(_queue_mx);
+    _queue.push_back(EvMQ{this, std::move(message)});
+}
 
 
 }

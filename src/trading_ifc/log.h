@@ -201,7 +201,7 @@ protected:
                 }
             }
             out << ')';
-        } else if constexpr(is_pair<T>) {
+        } else if constexpr(is_pair_type<T>) {
             _buffer.push_back('<');
             format_item(val.first);
             _buffer.push_back(':');
