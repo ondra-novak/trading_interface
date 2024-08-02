@@ -48,6 +48,11 @@ public:
         int status = 0;
         ///contains actuall result / error content
         json::value content = {};
+
+        friend std::ostream& operator<<(std::ostream &s, const Result &res) {
+            s << (res.is_error?"(ERROR)":"(ok)") << " " << res.content.to_json();
+            return s;
+        }
     };
 
 

@@ -111,28 +111,30 @@ bool RPCClient::process_responses() {
         }
         res.status = data["status"].get();
         std::string_view idstr = data["id"].get();
-        ID id = std::strtoull(idstr.data(), nullptr, 10);
+        if (!idstr.empty()) {
+            ID id = std::strtoull(idstr.data(), nullptr, 10);
 
-        std::unique_lock lk(_mx);
-        auto iter = _pending.find(id);
-        if (iter != _pending.end()) {
-            PendingRequest &req = iter->second;
-            if (std::holds_alternative<CallbackType>(req)) {
-                CallbackType &cb = std::get<CallbackType>(req);
-                lk.unlock();
-                cb(std::move(res));
-                lk.lock();
+            std::unique_lock lk(_mx);
+            auto iter = _pending.find(id);
+            if (iter != _pending.end()) {
+                PendingRequest &req = iter->second;
+                if (std::holds_alternative<CallbackType>(req)) {
+                    CallbackType &cb = std::get<CallbackType>(req);
+                    lk.unlock();
+                    cb(std::move(res));
+                    lk.lock();
+                    _pending.erase(iter);
+                }
+                else if (std::holds_alternative<CoroHandle>(req)) {
+                    CoroHandle h = std::get<CoroHandle>(req);
+                    req.template emplace<Result>(std::move(res));
+                    lk.unlock();
+                    h.resume();
+                    lk.lock();
                 _pending.erase(iter);
-            }
-            else if (std::holds_alternative<CoroHandle>(req)) {
-                CoroHandle h = std::get<CoroHandle>(req);
-                req.template emplace<Result>(std::move(res));
-                lk.unlock();
-                h.resume();
-                lk.lock();
-               _pending.erase(iter);
-            } else {
-                req.template emplace<Result>(std::move(res));
+                } else {
+                    req.template emplace<Result>(std::move(res));
+                }
             }
         }
     }

@@ -72,7 +72,7 @@ bool processFile(const std::filesystem::path& filename, State &state, std::ostre
         return false;
     }
 
-    std::string line;
+    std::string line = {};
     while (std::getline(inputFile, line)) {
         processLine(filename.parent_path(), line, state, out);
     }

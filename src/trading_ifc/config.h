@@ -52,11 +52,9 @@ public:
 
     Config() = default;
 
-    Config(const std::vector<std::pair<std::string, Value> > &values) {
-        for (const auto &[k,v]: values) {
-            _values[k] = v;
-        }
-    }
+    Config(const std::vector<std::pair<std::string, Value> > &values)
+        :_values(values.begin(), values.end()) {}
+    
 
     struct ValueRef {
         const Value *ref;

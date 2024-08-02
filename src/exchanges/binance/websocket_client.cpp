@@ -267,9 +267,11 @@ bool WebSocketClient::check_stalled(unsigned int interval_sec) {
     auto now = std::chrono::system_clock::now();
     auto expr = _last_activity_time+std::chrono::seconds(interval_sec);
     if (expr >= now) return false;
-    _send_ping = true;
+    if (!_connecting) {
+        _send_ping = true;
+        lws_callback_on_writable(_wsi);
+    }
     _last_activity_time = now;
-    lws_callback_on_writable(_wsi);
     return std::exchange(_stalled, true);;
 }
 

@@ -112,13 +112,15 @@ protected:
 
     InstrumentDefCache _instrument_def_cache;
 
-
+    
 
     virtual void on_ticker(std::string_view symbol,  const Ticker &ticker) override;
     virtual void on_orderbook(std::string_view symbol,  const OrderBook &update) override;
-    virtual void subscribe_result(std::string_view symbol, trading_api::SubscriptionType type, const RPCClient::Result &result) override;
     virtual void on_reconnect(std::string reason) override;
     virtual void on_ping() override;
+    virtual void on_order(const json::value &json_data) override;
+    virtual void on_stream_error(const RPCClient::Result &res) override;
+
 
     PIdentity find_identity(const std::string &ident) const;
 

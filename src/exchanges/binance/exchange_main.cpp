@@ -243,20 +243,9 @@ void BinanceExchange::restore_orders(void *context,
         std::span<trading_api::SerializedOrder> orders) {
 }
 
-void BinanceExchange::subscribe_result(std::string_view symbol,
-        SubscriptionType type, const RPCClient::Result &result) {
-    if (result.is_error) {
-        std::string error;
-        if (result.status == RPCClient::status_connection_lost) {
-            error = "Connection is unavailable";
-        } else {
-            error = result.content.to_string();
-        }
-        _log.warning("Failed to subscribe {} {} (will retry): {} ", type, symbol, error);
-    } else {
-        _log.trace("Subscribed {} {}", type, symbol);
-    }
 
+void BinanceExchange::on_stream_error(const RPCClient::Result &result) {
+    _log.warning("Stream error reported: {}", result);
 }
 
 void BinanceExchange::query_instruments(std::string_view query,
@@ -333,6 +322,10 @@ void BinanceExchange::set_api_key(std::string_view name,const trading_api::Confi
         throw std::runtime_error("Already exists");
     }
     _stream_map->add_stream(inst);
+}
+
+void BinanceExchange::on_order(const json::value &json_data) {
+    _log.debug("Order status {}", json_data.to_json());
 }
 
 

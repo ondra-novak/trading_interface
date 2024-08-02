@@ -10,9 +10,6 @@ public:
     virtual void on_orderbook(std::string_view symbol,  const trading_api::OrderBook &update) override {
         std::cout << symbol << ":" << update << std::endl;
     }
-    virtual void subscribe_result(std::string_view symbol, trading_api::SubscriptionType , const RPCClient::Result &res) override {
-        std::cout << symbol << ":" << (res.is_error?"error":"ok") << " " << res.status << " " << res.content.to_string() << std::endl;
-    }
 
 };
 

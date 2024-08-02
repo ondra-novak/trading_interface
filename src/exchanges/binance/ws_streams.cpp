@@ -6,7 +6,7 @@ WSStreams::WSStreams(IEvents &events, WebSocketContext &ctx, std::string url)
     _subclass_cb = [this](const auto &x){return on_json_message(x);};
 }
 
-static std::string to_id(std::string_view symbol, std::string_view type) {
+static std::string create_topic(std::string_view symbol, std::string_view type) {
     std::string s;
     s.append(symbol);
     std::transform(s.begin(), s.end(), s.begin(), [](char c){return std::tolower(c);});
@@ -15,49 +15,56 @@ static std::string to_id(std::string_view symbol, std::string_view type) {
     return s;
 }
 
-static json::value build_params(trading_api::SubscriptionType type, std::string_view symbol) {
-    switch (type) {
-        case trading_api::SubscriptionType::orderbook:
-            return {to_id(symbol,"depth")};
-        case trading_api::SubscriptionType::ticker:
-            return {to_id(symbol,"bookTicker"), to_id(symbol, "aggTrade")};
-        default:
-            throw std::runtime_error("unknown subscription type");
-    }
+
+void WSStreams::subscribe(SubscriptionType type, std::string_view symbol) {
+    manage_subscription([this](auto &&a, auto &&b){
+        subscribe(std::move(a), std::move(b));
+    },type, symbol);
 }
 
-void WSStreams::subscribe(SubscriptionType type, std::string_view symbol) {    ;
-    subscribe(std::unique_lock(_mx),type, symbol);
+template<typename Fn>
+void WSStreams::manage_subscription(Fn &&fn, SubscriptionType type, std::string_view symbol) {
+    std::unique_lock lk(_mx);
+    switch (type) {
+        case SubscriptionType::orderbook:
+            fn(std::move(lk), create_topic(symbol, "depth"));
+            break;
+        case SubscriptionType::ticker:
+            fn(std::move(lk), create_topic(symbol, "bookTicker"));
+            fn(std::move(lk), create_topic(symbol, "aggTrade"));
+            break;
+    }
+
 }
-void WSStreams::subscribe(std::unique_lock<std::mutex> &&lk,SubscriptionType type, std::string_view symbol) {
-    if (_subscrlist.insert(std::pair(type, std::string(symbol))).second) {
-        auto id = call_lk("SUBSCRIBE", build_params(type, symbol));
-        attach_callback(lk, id, [this, type, symbol = std::string(symbol)](const Result &res) {
+
+void WSStreams::subscribe(std::unique_lock<std::mutex> &&lk,std::string topic) {
+    if (_subscrlist.insert(topic).second) {
+        auto id = call_lk("SUBSCRIBE", {topic});
+        attach_callback(lk, id, [this, topic](const Result &res) {
             if (res.is_error) {
                 std::lock_guard _(_mx);
                 if (res.status != RPCClient::status_connection_lost) {
-                    _subscrlist.erase(std::pair(type, symbol));
+                    _subscrlist.erase(topic);
                 }
+                _events.on_stream_error(res);
             }
-            _events.subscribe_result(symbol, type, res);
         });
     }
-
-
 }
 void WSStreams::unsubscribe(SubscriptionType type, std::string_view symbol) {
-    unsubscribe(std::unique_lock(_mx),type, symbol);
+    manage_subscription([this](auto &&a, auto &&b){
+        unsubscribe(std::move(a), std::move(b));
+    },type, symbol);
 }
-void WSStreams::unsubscribe(std::unique_lock<std::mutex> &&lk,SubscriptionType type, std::string_view symbol) {
-    auto iter = _subscrlist.find(std::pair(type, std::string(symbol)));
+void WSStreams::unsubscribe(std::unique_lock<std::mutex> &&lk, std::string topic)
+{
+    auto iter = _subscrlist.find(topic);
     if (iter != _subscrlist.end()) {
-        _subscrlist.erase(std::pair(type, std::string(symbol)));
-        auto id =call_lk("UNSUBSCRIBE", build_params(type, symbol));
+        _subscrlist.erase(iter);
+        auto id =call_lk("UNSUBSCRIBE", {topic});
         attach_callback(lk, id, [](const Result &) {});
     }
-
 }
-
 
 WSStreams::InstrumentState &WSStreams::get_instrument(const std::string_view id) {
         auto iter = _instrument_states.find(id);
@@ -122,6 +129,9 @@ bool WSStreams::on_json_message(const json::value& v) {
         }
         _events.on_orderbook(s, st.orderbook);
         return true;
+    } else if (e == "ORDER_TRADE_UPDATE") {
+        _events.on_order(v);
+        return true;
     } else {
         return false;
     }
@@ -138,8 +148,11 @@ void WSStreams::reconnect(std::unique_lock<std::mutex> &&lk) {
     auto lst = std::move(_subscrlist);
     RPCClient::reconnect(std::move(lk));
     lk.lock();
-    for (const auto &[type, symbol]: lst) {
-        subscribe(std::move(lk), type, symbol);
-    }
-
+    json::value args(lst.begin(), lst.end());
+    auto id = call_lk("SUBSCRIBE", json::value(lst.begin(), lst.end()));
+    attach_callback(lk, id, [this](const Result &res) {
+        if (res.is_error) {
+            this->close();
+        }
+    });
 }

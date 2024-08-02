@@ -30,12 +30,12 @@ int main() {
     auto context = std::make_shared<trading_api::BasicExchangeContext>("Binance",log);
 
     trading_api::Config exchange_config ( {
-            {"server", std::string("testnet")}
+            {"server", std::string("live")}
     });
 
     trading_api::Config api_key ( {
-            {"api_name",std::string("3cfa2991082a67c0d3e20318b172d6badc07c1169ace1d83dae410b43b34f8d5")},
-            {"secret",std::string("13795a26cf2e407347d9a3a3c3283122f63cfe8dd3f214708e80c4cf002845bc")},
+            {"api_name",std::string("kvuBDXalY0f35Myi0hdf66FZc6onDUH1ytKs2amCeAKdN3kcDZUBuHZD464YoJdC")},
+            {"secret",std::string("mO5pqey9uE2tIetEIvYHXwpLcYnkVf6Zmz01tnB96ALcKNl72ciqVI12AMHy2q1d")},
     });
 
     context->init(std::make_unique<BinanceExchange>(), exchange_config);
