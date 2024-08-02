@@ -2,7 +2,10 @@
 	path = src/libs/json20
 	url = https://github.com/ondra-novak/json20.git
     shallow = true
-[submodule "src/libs/yaml"]
-	path = src/libs/yaml
-	url = https://github.com/jbeder/yaml-cpp.git
+[submodule "src/libs/coroserver"]
+	path = src/libs/coroserver
+	url = https://github.com/ondra-novak/coroserver.git
+[submodule "src/libs/libcoro"]
+	path = src/libs/libcoro
+	url = https://github.com/ondra-novak/libcoro.git
     shallow = true

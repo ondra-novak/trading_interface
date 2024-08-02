@@ -4,6 +4,7 @@
 #include "order.h"
 #include "fill.h"
 #include "async.h"
+#include "network.h"
 
 #include "log.h"
 namespace trading_api {
@@ -64,6 +65,9 @@ public:
 
     virtual Log get_log() const = 0;
 
+    ///Create Network object
+    virtual Network get_network() const = 0;
+
     class Null;
 
 };
@@ -78,6 +82,7 @@ public:
     virtual void object_updated(const Account &, AsyncStatus) override{throw_error();}
     virtual void object_updated(const Instrument &, AsyncStatus) override{throw_error();}
     virtual void income_data(const Instrument &, const TickData &) override{throw_error();}
+    virtual Network get_network() const override {throw_error();};
     virtual Log get_log() const override {throw_error();}
     virtual Exchange get_exchange() const override {throw_error();}
 };
@@ -161,6 +166,10 @@ public:
 
     Log get_log() const {
         return _ptr->get_log();
+    }
+
+    Network get_network() const {
+        return _ptr->get_network();
     }
 
 

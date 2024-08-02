@@ -13,7 +13,7 @@ class BasicExchangeContext: public IExchangeContext, public IExchange, public st
 public:
 
 
-    BasicExchangeContext(std::string label, Log log);
+    BasicExchangeContext(std::string label, Network ntw, Log log);
 
 
     void init(std::unique_ptr<IExchangeService> svc, Config configuration);
@@ -237,6 +237,7 @@ public:
 
     virtual Exchange get_exchange() const override;
     virtual Log get_log() const override;
+    virtual Network get_network() const override;
 
 protected:
 
@@ -244,6 +245,7 @@ protected:
     mutable std::recursive_mutex _mx;
 
     std::string _label;
+    Network _ntw;
     Log _log;
 
 

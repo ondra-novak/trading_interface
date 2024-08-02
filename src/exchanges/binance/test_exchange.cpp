@@ -27,7 +27,7 @@ int main() {
     std::cout << ev << std::endl;
 
     trading_api::Log log(std::make_shared<trading_api::BasicLog>(std::cout, trading_api::Log::Serverity::trace));
-    auto context = std::make_shared<trading_api::BasicExchangeContext>("Binance",log);
+    auto context = std::make_shared<trading_api::BasicExchangeContext>("Binance",trading_api::Network(),log);
 
     trading_api::Config exchange_config ( {
             {"server", std::string("live")}

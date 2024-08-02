@@ -1,7 +1,9 @@
 #pragma once
 #include "wrapper.h"
+#include <span>
 #include <string_view>
 #include <string>
+#include <vector>
 
 namespace trading_api {
 
@@ -19,29 +21,29 @@ public:
          * in context of this message
          * Execution of this function blocks receiving of other messages 
          */
-        virtual void on_message(std::string_view msg) = 0;
+        virtual void on_message(std::string_view msg) noexcept = 0;
         ///Binary message has been received
         /**
          * @param msg contains binary message. The string view is valid only
          * in context of this message
          * Execution of this function blocks receiving of other messages 
          */
-        virtual void on_message(binary_string_view msg) = 0;
+        virtual void on_message(binary_string_view msg) noexcept = 0;
         ///called once the connection is established
         /** 
          * You can send initial messages here 
          */
-        virtual void on_open() = 0;
+        virtual void on_open() noexcept = 0;
         ///called on error
         /** 
          * called when error is reported (even if reconnect is enabled)
          * This is way, how to find out, that connection has been interrupted.
          * The error description may be available through exception ptr
          */
-        virtual void on_error() = 0;   
+        virtual void on_error() noexcept = 0;   
         ///called when stream is closed (not called when reconnect)
         /**  This is last event, you can destroy the implementation object now */ 
-        virtual void on_close() = 0;
+        virtual void on_close() noexcept = 0;
     };
 
     virtual bool send(std::string_view msg) = 0;
@@ -94,13 +96,13 @@ public:
          */
         virtual void on_response(const Status &status, 
                                 const Headers &headers,
-                                const std::string_view &body) = 0;
+                                const std::string_view &body) noexcept = 0;
         
         ///RestClient is closed
         /**
          * This is last event, you can destroy the implementation object 
          */
-        virtual void on_close() = 0;
+        virtual void on_close() noexcept = 0;
     };
 
 
@@ -180,6 +182,7 @@ public:
 
    
     class IPrivKey {
+    public:
         virtual ~IPrivKey() = default;
     };
 
@@ -235,6 +238,7 @@ public:
      */
     virtual std::basic_string<unsigned char> sign_message(std::string_view message,const PrivKey &pk) const = 0;
 
+    virtual std::string make_query(std::span<const std::pair<std::string_view, std::string_view> > fields) const = 0;
 
     class Null;
 };
@@ -249,6 +253,7 @@ public:
     virtual PrivKey priv_key_from_file(std::string_view) const override {error();} 
     virtual PrivKey priv_key_from_string(std::string_view) const override {error();}
     virtual std::basic_string<unsigned char> sign_message(std::string_view ,const PrivKey &) const override {error();}
+    virtual std::string make_query(std::span<const std::pair<std::string_view, std::string_view> > ) const override {error();}
 };
 
 class Network: public Wrapper<INetwork> {
@@ -320,6 +325,9 @@ public:
         return _ptr->sign_message(message, pk);
     }
 
+    std::string make_query(std::initializer_list<std::pair<std::string_view, std::string_view> > fields) const {
+        return _ptr->make_query({fields.begin(), fields.size()});
+    }
 
 
 };

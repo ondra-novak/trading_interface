@@ -2,8 +2,9 @@
 
 namespace trading_api {
 
-BasicExchangeContext::BasicExchangeContext(std::string label, Log log)
+BasicExchangeContext::BasicExchangeContext(std::string label, Network ntw, Log log)
             :_label(std::move(label))
+            ,_ntw(std::move(ntw))
             ,_log(std::move(log),"ex/{}",_label) {}
 
 void BasicExchangeContext::init(std::unique_ptr<IExchangeService> svc, Config configuration) {
@@ -238,6 +239,9 @@ Exchange BasicExchangeContext::get_exchange() const {
 
 Log BasicExchangeContext::get_log() const {
     return _log;
+}
+Network BasicExchangeContext::get_network() const {
+    return _ntw;
 }
 
 void BasicExchangeContext::set_api_key(std::string_view name, const Config &api_key_config) {

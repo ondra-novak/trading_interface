@@ -39,7 +39,7 @@ void BinanceExchange::init(ExchangeContext context, const Config &config) {
         fstreams = "wss://fstream.binance.com/ws";
     }
     _public_fstream = std::make_unique<WSStreams>(*this, *_ws_context, fstreams);
-    _frest = std::make_unique<RestClient>(*_rest_context, frest);
+    _frest = std::make_unique<::RestClient>(*_rest_context, frest);
     _stream_map = std::make_unique<StreamMap>(trading_api::Log(_log, "STREAM"));
     _stream_map->add_stream(_public_fstream.get());
     _stream_wrk = std::jthread([this](std::stop_token stp){
@@ -105,7 +105,7 @@ void BinanceExchange::query_accounts(std::string_view identity, std::string_view
                 [this, ident = std::string(identity),
                        q = std::string(query),
                        l = std::string(label),
-                       cb = std::move(cb)](const RestClient::Result &result) mutable {
+                       cb = std::move(cb)](const ::RestClient::Result &result) mutable {
             auto ex = _ctx.get_exchange();
             if (!result.is_error()) {
                 auto data = result.content;
@@ -186,7 +186,7 @@ void BinanceExchange::update_account(const trading_api::Account &a) {
     if (ident) {
 
         _frest->signed_call(*ident, HttpMethod::GET, "/v2/account", {},
-                [this, a](const RestClient::Result &result) mutable {
+                [this, a](const ::RestClient::Result &result) mutable {
 
             if (!result.is_error()) {
                 auto ba = std::const_pointer_cast<BinanceAccount>(
@@ -300,11 +300,11 @@ void BinanceExchange::unset_api_key(std::string_view name) {
 
 void BinanceExchange::set_api_key(std::string_view name,const trading_api::Config &api_key_config) {
     WSEventListener lsn;
-    std::optional<RestClient::Result> res;
+    std::optional<::RestClient::Result> res;
 
     auto [api_name, secret] = api_key_config("api_name","secret");
     PIdentity ident = Identity::create({api_name.as<std::string>(),secret.as<std::string>()});
-    _frest->signed_call(*ident, HttpMethod::POST,  "/v1/listenKey", {},[&](const RestClient::Result &r){
+    _frest->signed_call(*ident, HttpMethod::POST,  "/v1/listenKey", {},[&](const ::RestClient::Result &r){
         res = r;lsn.signal(0);
     });
     lsn.wait();
