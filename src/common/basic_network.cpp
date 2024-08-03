@@ -1,4 +1,6 @@
 #include "basic_network.h"
+#include "rest_client.h"
+#include "websocket_client.h"
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
@@ -23,6 +25,14 @@ public:
 protected:
     EVP_PKEY *_key;
 };
+
+
+BasicNetwork::BasicNetwork(coroserver::Context &ctx, coroserver::ssl::Context &sslctx)
+:_ctx(ctx)
+,_sslctx(sslctx)
+,_httpc(_ctx, _sslctx, "QuarkTrading")
+{}
+
 
 std::shared_ptr<MyPrivKey> loadPrivateKeyFromStream(std::istream& keyStream) {
     // Read the stream into a string
@@ -152,4 +162,24 @@ std::string BasicNetwork::make_query(std::span<const std::pair<std::string_view,
     }
     return std::move(out).str();
 }
+
+WebSocketClient BasicNetwork::create_websocket_client(
+            WebSocketClient::IEvents &events,std::string_view url,  WSConfig cfg) const {
+    
+    std::string urlstr;
+    if (url.substr(0,6) == "wss://") urlstr = std::string("https://").append(url.substr(6));
+    else if (url.substr(0,5) == "ws://") urlstr = std::string("http://").append(url.substr(5));
+    else throw std::runtime_error("Invalid URL (protocol must be ws:// or wss://)");
+    auto c = std::make_shared<WSClientImpl>(_ctx,_httpc, events, std::move(urlstr), std::move(cfg));
+    c->start();
+    return WebSocketClient(std::move(c));
 }
+
+RestClient BasicNetwork::create_rest_client(RestClient::IEvents &events,
+                                 std::string_view base_url, unsigned int iotimeout_ms) const {
+    auto c = std::make_shared<RestClientImpl>(_ctx, _sslctx, events, base_url, iotimeout_ms);
+}
+
+
+}
+

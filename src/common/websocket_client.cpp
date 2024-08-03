@@ -3,7 +3,7 @@
 
 namespace trading_api {
 
-WSClientImpl::WSClientImpl(coroserver::Context &ctx,coroserver::http::Client &httpc, 
+WSClientImpl::WSClientImpl(coroserver::Context &ctx,coroserver::http::Client httpc, 
                             IEvents &events, std::string url, WebSocketConfig cfg) 
     :_ctx(ctx)
     ,_httpc(httpc)
@@ -49,7 +49,7 @@ coro::coroutine WSClientImpl::start_connect(std::weak_ptr<WSClientImpl> wkme) {
         auto now = std::chrono::system_clock::now();
         auto &ctx = me->_ctx;
         try {
-            auto &httpc = me->_httpc;
+            auto httpc = me->_httpc;
             auto url = me->_url;
             auto cfg = me->_cfg;
             me.reset();
@@ -86,6 +86,7 @@ void WSClientImpl::set_connect_success(coroserver::ws::Stream s) {
         std::lock_guard _(_mx);
         _stream = s;
     }
+    reader();
     _events.on_open();
 }    
 

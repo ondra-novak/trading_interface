@@ -11,21 +11,21 @@ namespace trading_api {
 class WSClientImpl: public IWebSocketClient, public std::enable_shared_from_this<WSClientImpl> {
 public:
 
-    WSClientImpl(coroserver::Context &ctx, coroserver::http::Client &httpc, IEvents &events, std::string url, WebSocketConfig cfg);
+    WSClientImpl(coroserver::Context &ctx, coroserver::http::Client httpc, IEvents &events, std::string url, WebSocketConfig cfg);
 
     void start();
     void reconnect();
 
-    virtual bool send(std::string_view msg) = 0;
-    virtual bool send(binary_string_view msg) = 0;
-    virtual bool close() = 0;
+    virtual bool send(std::string_view msg) override;
+    virtual bool send(binary_string_view msg) override;
+    virtual bool close() override;
 
-    ~WSClientImpl();
+    ~WSClientImpl() override;
 
 
 protected:
     coroserver::Context &_ctx;
-    coroserver::http::Client &_httpc;    
+    coroserver::http::Client _httpc;    
     IEvents &_events;
     std::string _url;
     WebSocketConfig _cfg;

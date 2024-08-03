@@ -12,6 +12,7 @@ add_library (trading_api_common
     context_scheduler.cpp
     basic_network.cpp
     websocket_client.cpp
+    rest_client.cpp
 )
 
 add_dependencies(trading_api_common libjson20_single_header)

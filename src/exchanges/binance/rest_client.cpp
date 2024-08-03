@@ -243,3 +243,4 @@ RestClient::FactorySigned RestClient::prepare_signed(const Identity &ident, Http
     }
 
 }
+

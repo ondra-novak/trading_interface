@@ -210,7 +210,7 @@ public:
      * @param url url to websocket server (ws:// or wss://)
      * @param cfg optional configuration */
     virtual WebSocketClient create_websocket_client(
-            WebSocketClient::IEvents &events,std::string url,  WSConfig cfg = {}) const = 0;
+            WebSocketClient::IEvents &events,std::string_view url,  WSConfig cfg = {}) const = 0;
     
     ///create a rest client 
     /**
@@ -221,7 +221,7 @@ public:
      * @param iotimeout_ms specifies I/O timeout.
      */
     virtual RestClient create_rest_client(RestClient::IEvents &events,
-                                 std::string base_url, unsigned int iotimeout_ms = 10000) const = 0;   
+                                 std::string_view base_url, unsigned int iotimeout_ms = 10000) const = 0;   
     
     ///calculate hmac256 of message and key
     /** 
@@ -261,8 +261,8 @@ class INetwork::Null: public INetwork {
 public:
     [[noreturn]] void error() const {throw std::runtime_error("not implemented");}
     
-    virtual WebSocketClient create_websocket_client(WebSocketClient::IEvents &,std::string,  WSConfig) const override {error();}
-    virtual RestClient create_rest_client(RestClient::IEvents &,std::string , unsigned int) const override {error();}   
+    virtual WebSocketClient create_websocket_client(WebSocketClient::IEvents &,std::string_view,  WSConfig) const override {error();}
+    virtual RestClient create_rest_client(RestClient::IEvents &,std::string_view , unsigned int) const override {error();}   
     virtual std::basic_string<unsigned char> calc_hmac256(std::string_view , std::string_view) const override {error();}   
     virtual PrivKey priv_key_from_file(std::string_view) const override {error();} 
     virtual PrivKey priv_key_from_string(std::string_view) const override {error();}
@@ -285,7 +285,7 @@ public:
      * @param url url to websocket server (ws:// or wss://)
      * @param cfg optional configuration */
     WebSocketClient create_websocket_client(
-            WebSocketClient::IEvents &events,std::string url,  WSConfig cfg = {}) const {
+            WebSocketClient::IEvents &events,std::string_view url,  WSConfig cfg = {}) const {
                 return _ptr->create_websocket_client(events,std::move(url), std::move(cfg));
             }
     
@@ -298,7 +298,7 @@ public:
      * @param iotimeout_ms specifies I/O timeout.
      */
     RestClient create_rest_client(RestClient::IEvents &events,
-                                 std::string base_url, unsigned int iotimeout_ms = 10000) const {
+                                 std::string_view base_url, unsigned int iotimeout_ms = 10000) const {
                                     return _ptr->create_rest_client(events, std::move(base_url), iotimeout_ms);
                                  }
     
