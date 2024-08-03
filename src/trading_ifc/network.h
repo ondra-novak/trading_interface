@@ -35,16 +35,15 @@ public:
          * You can send initial messages here 
          */
         virtual void on_open() noexcept = 0;
-        ///called on error
+        ///called when stream is closed/disconnected
         /** 
-         * called when error is reported (even if reconnect is enabled)
-         * This is way, how to find out, that connection has been interrupted.
-         * The error description may be available through exception ptr
+         * This event is generated when stream is closed by peer. If the reconnect is allowed, this
+         * event only notifies about lost context. After reconnect is successful, on_open si called
+         * 
          */
-        virtual void on_error() noexcept = 0;   
-        ///called when stream is closed (not called when reconnect)
-        /**  This is last event, you can destroy the implementation object now */ 
-        virtual void on_close() noexcept = 0;
+        virtual void on_close() noexcept = 0;   
+        ///called when client is destroyed
+        virtual void on_destroy() noexcept = 0;
     };
 
     virtual bool send(std::string_view msg) = 0;
@@ -59,10 +58,24 @@ public:
 
     WebSocketClient(std::shared_ptr<IWebSocketClient> ptr):_ptr(std::move(ptr)) {}
     ///send text message
+    /** @param msg message to send
+     * @retval true sent
+     * @retval false connection is currently unavailable. Message lost. You can send it
+     *  during on_open event(). 
+     */
     bool send(std::string_view msg) {return _ptr->send(msg);}
     ///send binary message
+    /** @param msg message to send
+     * @retval true sent
+     * @retval false connection is currently unavailable. Message lost. You can send it
+     *  during on_open event(). 
+     */
     bool send(binary_string_view msg) {return _ptr->send(msg);}
     ///close connection explicitly
+    /** when connection is closed, reconnect feature is disabled
+     * @retval true close is enqueued
+     * @retval false connection is currently unavailable. You need to send close on_open
+     */
     bool close() {return _ptr->close();}
 protected:
     std::shared_ptr<IWebSocketClient> _ptr;
@@ -99,11 +112,11 @@ public:
                                 const Headers &headers,
                                 const std::string_view &body) noexcept = 0;
         
-        ///RestClient is closed
+        ///RestClient is destroyed
         /**
          * This is last event, you can destroy the implementation object 
          */
-        virtual void on_close() noexcept = 0;
+        virtual void on_destroy() noexcept = 0;
     };
 
 

@@ -14,31 +14,36 @@ WSClientImpl::WSClientImpl(coroserver::Context &ctx,coroserver::http::Client &ht
 }
 
 
+coroserver::ws::Stream WSClientImpl::lock() {
+    std::lock_guard _(_mx);
+    return _stream;
+}
+
+
 WSClientImpl::~WSClientImpl()
 {
-    coroserver::ws::Stream w;
-    bool c;
-    {
-        std::lock_guard _(_mx);
-        c = _connecting;
-        w = _stream;
-    }
-    if (!c) {
-        w.shutdown();
-    }
-    _events.on_close();
+    coroserver::ws::Stream w = lock();
+    if (w) w.shutdown();
+    _events.on_destroy();
 }
 
 void WSClientImpl::start() {
     std::lock_guard _(_mx);
-    _connecting = true;
-    _start_connect_time = std::chrono::system_clock::now();
+    _stream = {};
     start_connect(weak_from_this());
+}
+
+void WSClientImpl::reconnect() {
+    std::lock_guard _(_mx);
+    _stream = {};
+    if (_cfg.reconnect) {
+        start_connect(weak_from_this());
+    }
 }
 
 
 coro::coroutine WSClientImpl::start_connect(std::weak_ptr<WSClientImpl> wkme) {
-    while (true) {
+    while(true) {
         auto me = wkme.lock();
         if (!me) co_return;
         auto now = std::chrono::system_clock::now();
@@ -72,7 +77,7 @@ coro::coroutine WSClientImpl::start_connect(std::weak_ptr<WSClientImpl> wkme) {
 
 }
 
-void WSClientImpl::set_connect_error(std::exception_ptr e) {
+void WSClientImpl::set_connect_error(std::exception_ptr ) {
     //todo: log error
 }
 
@@ -80,10 +85,64 @@ void WSClientImpl::set_connect_success(coroserver::ws::Stream s) {
     {
         std::lock_guard _(_mx);
         _stream = s;
-        _connecting = false;
     }
     _events.on_open();
 }    
+
+coro::coroutine WSClientImpl::reader() {
+    using namespace coroserver::ws;
+    try {
+        while (true) {
+            Message msg = co_await _stream.receive();
+            switch (msg.type) {
+                case Type::text:
+                    _events.on_message(msg.payload);
+                    break;
+                case Type::binary:
+                    _events.on_message(binary_string_view(
+                        reinterpret_cast<const unsigned char *>(msg.payload.data()),
+                        msg.payload.size()));
+                    break;
+                case Type::connClose:
+                    _events.on_close();
+                    reconnect();
+                    co_return;
+                default:
+                    break;
+            }
+        }
+    } catch (...) {
+        _events.on_close();
+        reconnect();
+    }
+} 
+
+bool WSClientImpl::send(std::string_view msg) {
+    auto s = lock();
+    return s?s.send({msg, coroserver::ws::Type::text}):false;
+}
+bool WSClientImpl::send(binary_string_view msg) {
+    auto s = lock();
+    return s?s.send({{reinterpret_cast<const char *>(msg.data()), msg.size()}, coroserver::ws::Type::binary}):false;
+}
+bool WSClientImpl::close() {
+    using namespace coroserver::ws;
+    Stream s;
+    {
+        std::lock_guard _(_mx);
+        s = std::move(_stream);
+        _cfg.reconnect = false;
+    }
+    if (s) {
+        auto c = [](Stream s) -> coro::coroutine {
+            co_await s.send_close();
+        };
+        c(std::move(s));
+        return true;
+    } else {
+        return false;
+    }
+}
 
 
 }
