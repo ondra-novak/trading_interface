@@ -15,6 +15,7 @@ public:
 
     ///Events sent to the user code 
     class IEvents {
+    public:
         ///Text message has been received
         /**
          * @param msg contains text message. The string view is valid only
