@@ -10,7 +10,7 @@ public:
 
     using ChannelID = std::string_view;
     using MessageContent = std::string_view;
-    
+
     class IMessage {
     public:
         virtual std::string_view get_sender() const = 0;
@@ -24,21 +24,21 @@ public:
     public:
         Message(const std::shared_ptr<const IMessage> &ptr):_ptr(ptr) {}
         ///Retrieve sender
-        /** 
+        /**
          * @return retrieves sender's mailbox address. If you need to send a response to
-         * the sender directly, you simply use this address as channel. 
-         * 
+         * the sender directly, you simply use this address as channel.
+         *
          * Every listener subscribes to its local mailbox by sending a message for the first
          * time
          */
         std::string_view get_sender() const {return _ptr->get_sender();}
         ///Retrieve channel name
-        /** 
+        /**
          * @return name of channel, where the message was posted. If the message was posted
          * to private channel, this function returns empty string
          *  */
         std::string_view get_channel() const {return _ptr->get_channel();}
-        
+
         /**Retrieve message content
          * @return message content
          */
@@ -125,7 +125,7 @@ public:
      * @param channel target channel
      * @param message message to send
      * @note sending message to an empty named channel always drops the message
-     * 
+     *
      * @note function subscribes local mailbox for the first time of call with new listener.
      * You need to unsubscribe_all() before listener is destroyed. If you don't
      * want to manage a listener instance, you can pass nullptr as listener. In this
@@ -135,6 +135,11 @@ public:
         _ptr->send_message(listener, channel, message);
     }
 
+    auto get_handle() const {return _ptr;}
+
+    explicit operator bool() const {return _ptr.get() != &null_broker;}
+    bool defined() const {return _ptr.get() != &null_broker;}
+    bool operator!() const {return _ptr.get() == &null_broker;}
 
 
 protected:
@@ -198,10 +203,10 @@ protected:
     MQBroker::IListener *_listener;
 };
 
-namespace _details { 
+namespace _details {
     template<std::output_iterator<char> Iter, typename T>
     inline Iter to_binary(Iter iter, const T &item) {
-        
+
         if constexpr(std::is_same_v<T, bool>) {
             return to_binary(iter, item?1:0);
         } else if constexpr(std::is_integral_v<T>) {
@@ -210,7 +215,7 @@ namespace _details {
                 do {
                     *iter = static_cast<unsigned char>(x&0x7F) | ((x>=0x80)?0x80:0);
                     ++iter;
-                    x>>=7;              
+                    x>>=7;
                 } while (x);
             } else {
                 auto x = (static_cast<std::make_unsigned_t<T> >(item<0?-(item+1):item) << 1) | (item<0?1:0);
@@ -238,7 +243,7 @@ namespace _details {
             static_assert(assert_error<T>, "This type cannot be stored to a message");
             return iter;
         }
-    } 
+    }
 
     template<std::size_t idx>
     struct valid_constant {
@@ -250,7 +255,7 @@ namespace _details {
         static constexpr bool valid = false;
     };
 
-    
+
     struct make_valueless_helper {
         template<typename T>
         operator T() const {throw false;}
@@ -259,14 +264,14 @@ namespace _details {
     template<std::size_t count, typename Fn,  std::size_t curidx = 0>
     auto to_constant(std::size_t idx, Fn &&fn) {
         if constexpr(curidx >= count) return fn(invalid_constant{});
-        else if constexpr(curidx == idx) return fn(valid_constant<curidx>{});
+        else if (curidx == idx) return fn(valid_constant<curidx>{});
         else return to_constant<count, curidx+1>(idx, std::forward<Fn>(fn));
     }
-    
+
 
     template<typename T, typename Iter>
     T from_binary(Iter &itr, Iter end) {
-        if (itr != end) { 
+        if (itr != end) {
             if constexpr(std::is_same_v<T, bool>) {
                 return from_binary<int>(itr, end) != 0;
             } else if constexpr(std::is_integral_v<T>) {
@@ -280,7 +285,7 @@ namespace _details {
                         x |= ((v & 0x7F) << shift);
                         shift += 7;
                         c = (v & 0x80) != 0;
-                    }                    
+                    }
                     return x;
                 } else {
                     auto x = from_binary<std::make_unsigned_t<T> >(itr, end);
@@ -350,7 +355,7 @@ public:
         return buff;
     }
 
- 
+
     static std::tuple<Args...> parse(std::string_view s) {
         auto b = s.begin();
         auto e = s.end();

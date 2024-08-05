@@ -6,10 +6,12 @@ namespace trading_api {
 
 
 BasicContext::~BasicContext() {
+    _mq.unsubscribe_all(this);
     _scheduler(Timestamp{}, [](auto){}, this);
     for (const auto &[e,_]: _exchanges) {
         BasicExchangeContext::from_exchange(e).disconnect(this);
     }
+
 }
 
 
@@ -420,6 +422,20 @@ void BasicContext::on_message(MQClient::Message message) {
     _queue.push_back(EvMQ{this, std::move(message)});
 }
 
+bool BasicContext::get_service(const std::type_info &tinfo, std::shared_ptr<void> &ptr) {
+    return false;
+}
+
+void BasicContext::mq_subscribe_channel(std::string_view channel) {
+    _mq.subscribe(this, channel);
+}
+void BasicContext::mq_unsubscribe_channel(std::string_view channel) {
+    _mq.unsubscribe(this, channel);
+}
+void BasicContext::mq_send_message(std::string_view channel, std::string_view msg) {
+    _mq.send_message(this, channel, msg);
+
+}
 
 }
 

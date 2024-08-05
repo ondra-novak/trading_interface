@@ -11,6 +11,8 @@
 #include "market_event.h"
 #include "mq.h"
 #include <span>
+#include "service.h"
+
 
 namespace trading_api {
 
@@ -19,7 +21,7 @@ namespace trading_api {
 
 
 
-class IContext {
+class IContext : public IService{
 public:
 
     virtual ~IContext() = default;
@@ -114,9 +116,10 @@ public:
     ///unsubscribe instrument
     virtual void unsubscribe(SubscriptionType type, const Instrument &i) = 0;
 
-    virtual MQClient get_mq_client() = 0;
+    virtual void mq_subscribe_channel(std::string_view channel) = 0;
+    virtual void mq_unsubscribe_channel(std::string_view channel) = 0;
+    virtual void mq_send_message(std::string_view channel, std::string_view msg) = 0;
 
-    
 
 
     virtual Log get_logger() const = 0;
@@ -148,8 +151,11 @@ public:
     virtual std::string get_var(std::string_view ) const override  {throw_error();}
     virtual void enum_vars(std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override {throw_error();}
     virtual void enum_vars(std::string_view , std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override  {throw_error();}
+    virtual bool get_service(const std::type_info &, std::shared_ptr<void> &) {return false;}
     virtual Log get_logger() const override {throw_error();}
-    virtual MQClient get_mq_client() override {throw_error();};
+    virtual void mq_subscribe_channel(std::string_view ) override {}
+    virtual void mq_unsubscribe_channel(std::string_view ) override {}
+    virtual void mq_send_message(std::string_view , std::string_view ) override{}
     constexpr virtual ~NullContext() {}
 
 };
@@ -530,8 +536,37 @@ public:
     ///Retrieve logger object (for logging and output)
     Log get_logger() {return _ptr->get_logger();}
 
-    MQClient get_mq_client() {
-        return _ptr->get_mq_client();
+    ///Subscribe MQ channel
+    /**
+     * MQ service allows to communicate between strategies. This function
+     * subscribes an MQ channel and allows to listen messages on that channel.
+     * The messages are received through on_mq_message() callback
+     *
+     * @param channel channel name. Name can't be empty string
+     */
+    void mq_subscribe_channel(std::string_view channel) {
+        _ptr->mq_subscribe_channel(channel);
+    }
+
+    ///Unsubscribe MQ channel
+    /**
+     * @param channel channel to unsubscribe
+     */
+    void mq_unsubscribe_channel(std::string_view channel) {
+        _ptr->mq_unsubscribe_channel(channel);
+    }
+
+    ///Send message to a channel
+    /**
+     * @param channel name of channel. You are allowed to send messages to channel
+     *  you are not subscribed. You can use sender name as channel name to send
+     *  direct message
+     * @param msg message to send
+     *
+     * @note there is no way how to find out whether the message was delivered
+     */
+    void mq_send_message(std::string_view channel, std::string_view msg) {
+        _ptr->mq_send_message(channel, msg);
     }
 
 protected:

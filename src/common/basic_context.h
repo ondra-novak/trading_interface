@@ -38,10 +38,16 @@ public:
 
     using GlobalScheduler = std::function<void(Timestamp,std::function<void(Timestamp)>, const void *)>;
 
-    BasicContext(std::unique_ptr<IStorage> storage, GlobalScheduler gscheduler, Log logger, std::string_view strategy_name)
+    BasicContext(std::unique_ptr<IStorage> storage,
+            GlobalScheduler gscheduler,
+            Log logger,
+            MQBroker mq,
+            std::string_view strategy_name)
         :_scheduler(std::move(gscheduler))
         ,_storage(std::move(storage))
-        ,_logger(std::move(logger), "{}", strategy_name){
+        ,_logger(std::move(logger), "{}", strategy_name)
+        ,_mq(mq)
+    {
     }
 
     BasicContext(const BasicContext &) = delete;
@@ -76,6 +82,7 @@ public:
     virtual void update_instrument(const Instrument &i, CompletionCB complete_ptr) override;
     virtual void unset_var(std::string_view var_name) override;
     virtual void set_var(std::string_view var_name, std::string_view value) override;
+    virtual bool get_service(const std::type_info &tinfo, std::shared_ptr<void> &ptr) override;
     virtual Log get_logger() const override;
     virtual std::string get_var(std::string_view var_name) const override;
     virtual std::span<const Account> get_accounts() const override;
@@ -86,6 +93,10 @@ public:
             Function<void(std::string_view,std::string_view)> &fn) const override;
     virtual const Config &get_config() const override;
     virtual void on_message(MQClient::Message message) override;
+    virtual void mq_subscribe_channel(std::string_view channel) override;
+    virtual void mq_unsubscribe_channel(std::string_view channel) override;
+    virtual void mq_send_message(std::string_view channel, std::string_view msg) override;
+
     virtual void on_unhandled_exception()  override;
 protected:
 
@@ -93,6 +104,7 @@ protected:
     std::unique_ptr<IStorage> _storage;
     std::unique_ptr<IStrategy> _strategy;
     Log _logger;
+    MQBroker _mq;
     std::vector<Account> _accounts;
     std::vector<Instrument> _instruments;
     Config _config;

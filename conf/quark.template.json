@@ -1,0 +1,38 @@
+{
+    "exchanges": {
+        "binance":{
+            "module":"binance.so",
+            "settings": {
+                "server":"live"
+            },
+            "login":{
+                "master": {
+                    "name":"xweqweqe",
+                    "secret":"xyrzw"
+                }
+            },
+            "accounts":{
+                "main":{
+                    "login":"master",
+                    "query":"USDT"
+                }
+            },
+            "instruments":{
+                "Bitcoin":"BTCUSDT",
+                "Ethereum":"ETHUSDT"
+            }
+        }
+    },
+
+    "strategies": {
+        "example":{
+            "module":"example.so",
+            "accounts":["main"],
+            "instruments":["Bitcoin","Ethereum"],
+            "settings":{
+                "key":"value"
+            }
+        }
+    }
+
+}
