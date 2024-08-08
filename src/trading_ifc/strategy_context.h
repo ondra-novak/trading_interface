@@ -151,7 +151,7 @@ public:
     virtual std::string get_var(std::string_view ) const override  {throw_error();}
     virtual void enum_vars(std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override {throw_error();}
     virtual void enum_vars(std::string_view , std::string_view ,  Function<void(std::string_view, std::string_view)> &) const override  {throw_error();}
-    virtual bool get_service(const std::type_info &, std::shared_ptr<void> &) {return false;}
+    virtual bool get_service(const std::type_info &, std::shared_ptr<void> &) override {return false;}
     virtual Log get_logger() const override {throw_error();}
     virtual void mq_subscribe_channel(std::string_view ) override {}
     virtual void mq_unsubscribe_channel(std::string_view ) override {}

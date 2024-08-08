@@ -24,7 +24,7 @@ class IInstrument {
 public:
 
 
-    enum class Type {
+    enum class Type: unsigned char {
         ///unknown type (not tradable)
         unknown,
         ///classic spot, no leverage, no short

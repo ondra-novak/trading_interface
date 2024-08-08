@@ -217,6 +217,7 @@ namespace _details {
                     ++iter;
                     x>>=7;
                 } while (x);
+                return iter;
             } else {
                 auto x = (static_cast<std::make_unsigned_t<T> >(item<0?-(item+1):item) << 1) | (item<0?1:0);
                 return to_binary(iter, x);
@@ -335,13 +336,14 @@ namespace _details {
         return T();
     }
 
-    template<std::output_iterator<char> Iter,typename T, typename ... Args>
-    Iter to_binary_args(Iter iter, const T &x, const Args &...args) {
-        return to_binary_args(to_binary(iter, x), args ...);
-    }
-
     template<std::output_iterator<char> Iter >
     Iter to_binary_args(Iter iter) {return iter;}
+
+    template<std::output_iterator<char> Iter,typename T, typename ... Args>
+    Iter to_binary_args(Iter iter, const T &x, const Args &...args) {
+        return to_binary_args<Iter, Args...>(to_binary(iter, x), args ...);
+    }
+
 
 }
 template<typename ... Args>

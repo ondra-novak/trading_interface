@@ -13,6 +13,7 @@ add_library (trading_api_common
     basic_network.cpp
     websocket_client.cpp
     rest_client.cpp
+    leveldb_storage.cpp
 )
 
 add_dependencies(trading_api_common libjson20_single_header)

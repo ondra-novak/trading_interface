@@ -118,7 +118,7 @@ template<typename T>
 constexpr bool assert_error = false; 
 
 
-enum class Side {
+enum class Side: signed char {
     undefined = 0,
     buy = 1,
     sell = -1
